@@ -44,7 +44,6 @@ class SongController:
         song = self.song_repo.find_by_id(song_id)
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
-        
         # Check access rights
         if song.user_id and (not current_user or song.user_id != current_user.id):
             raise HTTPException(status_code=403, detail="Access denied")
@@ -56,7 +55,8 @@ class SongController:
         song_dict = song_data.dict()
         song = self.song_repo.create_song(song_dict, current_user.id)
         return self._convert_to_response(song)
-      def update_song(
+    
+    def update_song(
         self, 
         song_id: str, 
         song_data: SongUpdate, 
@@ -97,7 +97,8 @@ class SongController:
             return {"message": "Song deleted successfully"}
         else:
             raise HTTPException(status_code=500, detail="Failed to delete song")
-      def download_from_youtube(
+    
+    def download_from_youtube(
         self, 
         request: YouTubeDownloadRequest,
         current_user = None
@@ -140,7 +141,8 @@ class SongController:
                 success=False,
                 message=f"Download failed: {str(e)}"
             )
-      def sync_songs(
+    
+    def sync_songs(
         self, 
         request: SongSyncRequest, 
         current_user
@@ -168,7 +170,8 @@ class SongController:
                 failed_count=len(request.songs),
                 errors=[str(e)]
             )
-      def search_songs(
+    
+    def search_songs(
         self,
         q: str, 
         skip: int = 0, 
@@ -245,3 +248,5 @@ class SongController:
             'updated_at': song.updated_at
         }
         return SongResponse(**song_dict)
+
+# SongController class is defined above

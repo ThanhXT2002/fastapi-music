@@ -12,3 +12,5 @@ document/
 .env
 .env.example
 music.db
+API_TEST_RESULTS.md
+test_api_corrected.py

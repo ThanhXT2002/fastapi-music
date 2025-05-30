@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from typing import List, Optional
 
 from app.api.controllers.song import SongController
-from app.api.middleware.auth import get_current_user_optional
+from app.api.middleware.auth import get_current_user_optional, get_current_user
 from app.api.validators.song import (
     SongCreate, SongUpdate, SongResponse,
     YouTubeDownloadRequest, YouTubeDownloadResponse,
@@ -35,7 +35,7 @@ async def search_songs(
 @router.get("/favorites", response_model=List[SongResponse])
 async def get_favorites(
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Get user's favorite songs (authenticated users only)"""
     return controller.get_favorites(current_user)
@@ -43,7 +43,7 @@ async def get_favorites(
 @router.get("/recently-played", response_model=List[SongResponse])
 async def get_recently_played(
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Get recently played songs (authenticated users only)"""
     return controller.get_recently_played(current_user)
@@ -61,7 +61,7 @@ async def download_from_youtube(
 async def sync_songs(
     request: SongSyncRequest,
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Sync songs from frontend (authenticated users only)"""
     return controller.sync_songs(request, current_user)
@@ -79,7 +79,7 @@ async def get_song(
 async def create_song(
     song_data: SongCreate,
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Create new song (authenticated users only)"""
     return controller.create_song(song_data, current_user)
@@ -89,7 +89,7 @@ async def update_song(
     song_id: str,
     song_data: SongUpdate,
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Update song (owner only)"""
     return controller.update_song(song_id, song_data, current_user)
@@ -98,7 +98,7 @@ async def update_song(
 async def delete_song(
     song_id: str,
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Delete song (owner only)"""
     return controller.delete_song(song_id, current_user)
@@ -107,7 +107,7 @@ async def delete_song(
 async def toggle_favorite(
     song_id: str,
     controller: SongController = Depends(),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(get_current_user)
 ):
     """Toggle favorite status of a song"""
     return controller.toggle_favorite(song_id, current_user)
