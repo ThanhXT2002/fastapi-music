@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from app.config.database import get_db
 from app.config.config import settings
-from app.internal.utils.helpers import verify_google_token
+from app.internal.utils.helpers import verify_firebase_token
 from app.internal.domain.errors import GoogleAuthError, UserNotFoundError
 from app.internal.storage.repositories.user import UserRepository
 from app.internal.rfc.jwt.jwt import create_access_token
@@ -16,8 +16,8 @@ class AuthController:
         
     def google_login(self, token: str) -> AuthResponse:
         try:
-            # Verify Google token
-            user_info = verify_google_token(token)
+            # Verify Firebase ID token
+            user_info = verify_firebase_token(token)
             
             # Check if user exists
             user = self.user_repo.find_by_google_id(user_info['google_id'])
