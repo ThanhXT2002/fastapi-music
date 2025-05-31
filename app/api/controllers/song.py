@@ -20,22 +20,47 @@ class SongController:
     
     def _convert_to_response(self, song) -> SongResponse:
         """Helper method to convert Song model to SongResponse"""
+        import json
+        
         try:
+            # Parse JSON fields if they exist
+            artists = song.artists
+            if isinstance(artists, str):
+                try:
+                    artists = json.loads(artists)
+                except:
+                    artists = None
+                    
+            genre = song.genre
+            if isinstance(genre, str):
+                try:
+                    genre = json.loads(genre)
+                except:
+                    genre = None
+                    
+            keywords = song.keywords
+            if isinstance(keywords, str):
+                try:
+                    keywords = json.loads(keywords)
+                except:
+                    keywords = None
+            
             return SongResponse(
                 id=getattr(song, 'id', str(uuid.uuid4())),
                 title=getattr(song, 'title', 'Unknown Title'),
                 artist=getattr(song, 'artist', 'Unknown Artist'),
-                artists=getattr(song, 'artists', None),
+                artists=artists,
                 album=getattr(song, 'album', None),
                 duration=getattr(song, 'duration', 0),
-                genre=getattr(song, 'genre', None),
+                genre=genre,
                 release_date=getattr(song, 'release_date', None),
                 thumbnail_url=getattr(song, 'thumbnail_url', None),
                 audio_url=getattr(song, 'audio_url', None),
                 lyrics=getattr(song, 'lyrics', None),
                 has_lyrics=getattr(song, 'has_lyrics', False),
-                keywords=getattr(song, 'keywords', None),
+                keywords=keywords,
                 source=getattr(song, 'source', 'youtube'),
+                source_url=getattr(song, 'source_url', None),
                 bitrate=getattr(song, 'bitrate', None),
                 language=getattr(song, 'language', None),
                 is_downloaded=getattr(song, 'is_downloaded', True),
@@ -78,8 +103,7 @@ class SongController:
                     song=self._convert_to_response(existing_song),
                     download_path=existing_song.local_path
                 )
-            
-            # Download from YouTube
+              # Download from YouTube
             success, result, song_data = self.youtube_downloader.download_audio(request.url)
             
             if not success:
@@ -93,11 +117,12 @@ class SongController:
             song_data['downloaded_at'] = datetime.utcnow()
             song = self.song_repo.create_song(song_data, user_id)
             
+            # Create response with complete information
             return YouTubeDownloadResponse(
                 success=True,
                 message='Song downloaded successfully',
                 song=self._convert_to_response(song),
-                download_path=result
+                download_path=song_data.get('audio_url', result)  # Use HTTP URL instead of file path
             )
             
         except Exception as e:

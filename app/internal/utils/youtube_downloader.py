@@ -221,16 +221,24 @@ class YouTubeDownloader:
         # Extract tags/keywords
         tags = info.get('tags', [])
         categories = info.get('categories', [])
-        keywords = tags + categories
+        keywords = tags + categories        # Create HTTP URLs for serving files
+        import os
+        audio_filename = os.path.basename(audio_path) if audio_path else None
+        thumbnail_filename = os.path.basename(thumbnail_path) if thumbnail_path else None
+        
+        # Construct URLs for serving the files (use forward slashes for web URLs)
+        audio_url = f"/uploads/audio/{audio_filename}" if audio_filename else None
+        thumbnail_url = f"/uploads/thumbnails/{thumbnail_filename}" if thumbnail_filename else None
         
         song_data = {
             'title': title,
             'artist': artist,
             'duration': duration,
             'release_date': release_date,
-            'audio_url': info.get('webpage_url'),
-            'local_path': audio_path,
-            'thumbnail_url': thumbnail_path,
+            'audio_url': audio_url,  # HTTP URL to serve the audio file
+            'source_url': info.get('webpage_url'),  # Original YouTube URL
+            'local_path': audio_path,  # Local file system path
+            'thumbnail_url': thumbnail_url,  # HTTP URL to serve the thumbnail
             'keywords': keywords[:10] if keywords else [],  # Limit to 10 keywords
             'source': 'youtube',
             'is_downloaded': True,

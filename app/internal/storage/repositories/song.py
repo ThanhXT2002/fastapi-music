@@ -13,8 +13,7 @@ class SongRepository(BaseRepository[Song]):
         """Create a new song"""
         song_data['id'] = str(uuid.uuid4())
         song_data['user_id'] = user_id
-        
-        # Convert list fields to JSON strings
+          # Convert list fields to JSON strings
         if 'artists' in song_data and song_data['artists']:
             song_data['artists'] = json.dumps(song_data['artists'])
         if 'genre' in song_data and song_data['genre']:
@@ -25,5 +24,5 @@ class SongRepository(BaseRepository[Song]):
         return super().create(song_data)
     
     def find_by_youtube_url(self, url: str) -> Optional[Song]:
-        """Find song by YouTube URL"""
-        return self.db.query(Song).filter(Song.audio_url == url).first()
+        """Find song by YouTube URL - check source_url field"""
+        return self.db.query(Song).filter(Song.source_url == url).first()

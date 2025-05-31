@@ -32,10 +32,10 @@ class Song(Base):
     is_favorite = Column(Boolean, default=False)
     play_count = Column(Integer, default=0)
     last_played_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Metadata
+      # Metadata
     keywords = Column(Text, nullable=True)  # JSON string of keywords array
     source = Column(String(50), default='youtube')  # 'local', 'youtube', 'spotify'
+    source_url = Column(String(500), nullable=True)  # Original source URL (YouTube, etc.)
     bitrate = Column(Integer, nullable=True)
     language = Column(String(10), nullable=True)
     

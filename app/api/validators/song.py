@@ -16,9 +16,9 @@ class SongBase(BaseModel):
     audio_url: Optional[str] = None
     lyrics: Optional[str] = None
     has_lyrics: Optional[bool] = False
-    
     keywords: Optional[List[str]] = None
     source: Optional[str] = Field(default='youtube')
+    source_url: Optional[str] = None  # Original source URL (YouTube, etc.)
     bitrate: Optional[int] = None
     language: Optional[str] = None
     
@@ -75,4 +75,4 @@ class YouTubeDownloadResponse(BaseModel):
     success: bool
     message: str
     song: Optional[SongResponse] = None
-    download_path: Optional[str] = None
+    download_path: Optional[str] = None  # HTTP URL to access the downloaded audio file
