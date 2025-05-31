@@ -25,9 +25,6 @@ Server chạy tại: http://localhost:8000
 
 ### Music Management
 - **YouTube Download**: Tải nhạc từ YouTube với metadata
-- **Search**: Tìm kiếm bài hát theo title, artist
-- **Library**: Quản lý thư viện nhạc cá nhân
-- **Favorites**: Đánh dấu yêu thích và lịch sử phát
 
 ### Authentication  
 - **Firebase Auth**: Google OAuth thông qua Firebase
@@ -40,10 +37,7 @@ Server chạy tại: http://localhost:8000
 - `POST /api/v1/auth/google` - Login with Firebase token
 
 ### Songs
-- `GET /api/v1/songs` - Get user's songs
-- `POST /api/v1/songs` - Create new song
 - `POST /api/v1/songs/download` - Download from YouTube
-- `GET /api/v1/songs/search` - Search songs
 
 ## 🧪 Testing
 

@@ -31,10 +31,7 @@ Protected Endpoints
 
 ### Protected Endpoints
 
-- **GET /api/v1/songs** - Danh sách bài hát
-- **POST /api/v1/songs** - Tạo bài hát mới
 - **POST /api/v1/songs/download** - Download từ YouTube
-- **GET /api/v1/songs/search** - Tìm kiếm bài hát
 
 ## 🚀 Cài đặt và chạy
 

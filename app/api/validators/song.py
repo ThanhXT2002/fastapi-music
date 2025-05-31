@@ -1,14 +1,14 @@
+# filepath: e:\API\fastapi-music\app\api\validators\song.py
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
-import re
 
 class SongBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     artist: str = Field(..., min_length=1, max_length=255)
     artists: Optional[List[str]] = None
     album: Optional[str] = None
-    duration: int = Field(..., gt=0)
+    duration: int = Field(..., ge=0)  # Changed from gt=0 to ge=0 to allow 0 duration
     genre: Optional[List[str]] = None
     release_date: Optional[str] = None
     
@@ -28,28 +28,19 @@ class SongBase(BaseModel):
         if v not in ['local', 'youtube', 'spotify']:
             raise ValueError('Source must be one of: local, youtube, spotify')
         return v
-
-class SongCreate(SongBase):
-    pass
-
-class SongUpdate(BaseModel):
-    title: Optional[str] = None
-    artist: Optional[str] = None
-    artists: Optional[List[str]] = None
-    album: Optional[str] = None
-    duration: Optional[int] = None
-    genre: Optional[List[str]] = None
-    release_date: Optional[str] = None
     
-    thumbnail_url: Optional[str] = None
-    audio_url: Optional[str] = None
-    lyrics: Optional[str] = None
-    has_lyrics: Optional[bool] = None
-    
-    is_favorite: Optional[bool] = None
-    keywords: Optional[List[str]] = None
-    bitrate: Optional[int] = None
-    language: Optional[str] = None
+    @field_validator('keywords')
+    @classmethod
+    def validate_keywords(cls, v):
+        # Handle case where keywords might be passed as a JSON string
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except:
+                # If it's not valid JSON, treat as a single keyword
+                return [v] if v else []
+        return v
 
 class SongResponse(SongBase):
     id: str
@@ -85,13 +76,3 @@ class YouTubeDownloadResponse(BaseModel):
     message: str
     song: Optional[SongResponse] = None
     download_path: Optional[str] = None
-
-class SongSyncRequest(BaseModel):
-    songs: List[SongCreate]
-
-class SongSyncResponse(BaseModel):
-    success: bool
-    message: str
-    synced_count: int
-    failed_count: int
-    errors: Optional[List[str]] = None

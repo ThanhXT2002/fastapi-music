@@ -14,7 +14,6 @@ class YouTubeDownloader:
         # Create directories if they don't exist
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.thumbnail_dir.mkdir(parents=True, exist_ok=True)
-    
     def extract_info(self, url: str) -> Optional[Dict]:
         """Extract video information without downloading"""
         ydl_opts = {
@@ -29,6 +28,94 @@ class YouTubeDownloader:
         except Exception as e:
             print(f"Error extracting info: {e}")
             return None
+            
+    def get_video_details(self, url: str) -> Dict:
+        """Get only necessary video details for frontend without downloading
+        
+        Returns:
+            Dict with: title, artist, thumbnail_url, audio_url, duration
+        """
+        try:
+            # Extract all info first
+            info = self.extract_info(url)
+            if not info:
+                return {
+                    "success": False,
+                    "message": "Failed to extract video information"
+                }
+            
+            # Get title and uploader (artist)
+            title = info.get('title', 'Unknown Title')
+            uploader = info.get('uploader', 'Unknown Artist')
+            
+            # Try to parse artist and title from video title (if it follows "Artist - Title" format)
+            artist = uploader
+            original_title = title
+            if ' - ' in title:
+                parts = title.split(' - ', 1)
+                artist = parts[0].strip()
+                title = parts[1].strip()
+            
+            # Get best thumbnail
+            thumbnails = info.get('thumbnails', [])
+            best_thumbnail = None
+            if thumbnails:
+                # Sort by resolution and pick the highest quality
+                sorted_thumbnails = sorted(thumbnails, 
+                                          key=lambda x: (x.get('width', 0) * x.get('height', 0)), 
+                                          reverse=True)
+                best_thumbnail = sorted_thumbnails[0].get('url') if sorted_thumbnails else None
+            
+            # Get direct audio stream URL
+            formats = info.get('formats', [])
+            audio_formats = [f for f in formats if f.get('vcodec') == 'none' and f.get('acodec') != 'none']
+            
+            best_audio_url = None
+            if audio_formats:
+                # Sort by quality and pick the best
+                sorted_formats = sorted(audio_formats,
+                                       key=lambda x: x.get('abr', 0),
+                                       reverse=True)
+                best_audio_url = sorted_formats[0].get('url') if sorted_formats else None
+            
+            # If no audio-only format found, use the original URL
+            if not best_audio_url:
+                best_audio_url = url
+            
+            # Get duration
+            duration = info.get('duration', 0)
+            
+            result = {
+                "success": True,
+                "title": title,
+                "original_title": original_title,
+                "artist": artist,
+                "thumbnail_url": best_thumbnail,
+                "audio_url": best_audio_url,
+                "duration": duration,
+                "duration_formatted": self._format_duration(duration)
+            }
+            
+            return result
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error: {str(e)}"
+            }
+    
+    def _format_duration(self, seconds: int) -> str:
+        """Format seconds into mm:ss or hh:mm:ss"""
+        if not seconds:
+            return "00:00"
+        
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        if hours:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        else:
+            return f"{minutes:02d}:{seconds:02d}"
     
     def download_audio(self, url: str, filename: Optional[str] = None) -> Tuple[bool, str, Optional[Dict]]:
         """Download audio from YouTube URL"""
@@ -38,7 +125,8 @@ class YouTubeDownloader:
                 filename = str(uuid.uuid4())
             
             audio_path = self.audio_dir / f"{filename}.%(ext)s"
-            thumbnail_path = self.thumbnail_dir / f"{filename}.%(ext)s"
+            thumbnail_path = self.thumbnail_dir / f"{filename}.%(ext)s"            # Get FFmpeg path - improved detection
+            ffmpeg_location = self._get_ffmpeg_location()
             
             ydl_opts = {
                 'format': 'bestaudio/best',
@@ -60,6 +148,10 @@ class YouTubeDownloader:
                 'audioquality': 192,
             }
             
+            # Add FFmpeg location if found
+            if ffmpeg_location:
+                ydl_opts['ffmpeg_location'] = ffmpeg_location
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # Extract info first
                 info = ydl.extract_info(url, download=False)
@@ -76,13 +168,15 @@ class YouTubeDownloader:
                 if info_file.exists():
                     with open(info_file, 'r', encoding='utf-8') as f:
                         additional_info = json.load(f)
-                
-                # Find thumbnail file
+                  # Find thumbnail file and move it to correct directory
                 thumbnail_file = None
                 for ext in ['jpg', 'jpeg', 'png', 'webp']:
                     potential_thumb = self.audio_dir / f"{filename}.{ext}"
                     if potential_thumb.exists():
-                        thumbnail_file = potential_thumb
+                        # Move thumbnail to thumbnail directory
+                        target_thumb = self.thumbnail_dir / f"{filename}.{ext}"
+                        potential_thumb.rename(target_thumb)
+                        thumbnail_file = target_thumb
                         break
                 
                 # Prepare song data
@@ -180,3 +274,100 @@ class YouTubeDownloader:
                 results.append(result)
         
         return results
+    
+    def _get_ffmpeg_location(self) -> Optional[str]:
+        """Find FFmpeg location on the system"""
+        import os
+        import shutil
+        import subprocess
+        
+        # First try to find ffmpeg in PATH
+        ffmpeg_path = shutil.which('ffmpeg')
+        if ffmpeg_path:
+            return os.path.dirname(ffmpeg_path)
+          # Project-specific FFmpeg location (for deployment)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+        project_ffmpeg = os.path.join(project_root, "ffmpeg", "bin")
+        
+        # If not in PATH, try locations in order of preference
+        possible_paths = [
+            # 1. Project bundled FFmpeg (for deployment)
+            project_ffmpeg,
+            # 2. Current working directory
+            os.path.join(os.getcwd(), "ffmpeg", "bin"),
+            # 3. Windows system locations
+            f"C:\\Users\\{os.environ.get('USERNAME', '')}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1.1-full_build\\bin",
+            "C:\\ffmpeg\\bin",
+            "C:\\Program Files\\ffmpeg\\bin",
+            "C:\\Program Files (x86)\\ffmpeg\\bin"
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(os.path.join(path, "ffmpeg.exe")):
+                return path
+        
+        # Try to use where command on Windows
+        try:
+            result = subprocess.run(['where', 'ffmpeg'], capture_output=True, text=True, shell=True)
+            if result.returncode == 0 and result.stdout.strip():
+                ffmpeg_exe_path = result.stdout.strip().split('\n')[0]
+                return os.path.dirname(ffmpeg_exe_path)
+        except:
+            pass
+        
+        return None
+    
+    def download_audio_direct(self, url: str, filename: Optional[str] = None) -> Tuple[bool, str, Optional[Dict]]:
+        """Download audio directly without FFmpeg conversion"""
+        try:
+            # Generate unique filename if not provided
+            if not filename:
+                filename = str(uuid.uuid4())
+            
+            audio_path = self.audio_dir / f"{filename}.%(ext)s"
+            
+            ydl_opts = {
+                'format': 'bestaudio[ext=m4a]/bestaudio/best',
+                'outtmpl': str(audio_path),
+                'writethumbnail': True,
+                'writeinfojson': True,
+                # Không dùng FFmpeg postprocessors
+                'prefer_ffmpeg': False,
+                'keepvideo': False,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Extract info first
+                info = ydl.extract_info(url, download=False)
+                
+                # Download
+                ydl.download([url])
+                
+                # Tìm file audio đã download (có thể là .m4a, .webm, .opus)
+                audio_file = None
+                for ext in ['m4a', 'webm', 'opus', 'mp4']:
+                    potential_file = self.audio_dir / f"{filename}.{ext}"
+                    if potential_file.exists():
+                        audio_file = potential_file
+                        break
+                
+                if not audio_file:
+                    return False, "Audio file not found after download", None
+                  # Find thumbnail file and move it to correct directory
+                thumbnail_file = None
+                for ext in ['jpg', 'jpeg', 'png', 'webp']:
+                    potential_thumb = self.audio_dir / f"{filename}.{ext}"
+                    if potential_thumb.exists():
+                        # Move thumbnail to thumbnail directory
+                        target_thumb = self.thumbnail_dir / f"{filename}.{ext}"
+                        potential_thumb.rename(target_thumb)
+                        thumbnail_file = target_thumb
+                        break
+                
+                # Prepare song data
+                song_data = self._extract_song_data(info, str(audio_file), str(thumbnail_file) if thumbnail_file else None)
+                
+                return True, str(audio_file), song_data
+                
+        except Exception as e:
+            return False, f"Download failed: {str(e)}", None
