@@ -132,7 +132,7 @@ class YouTubeDownloader:
                 'format': 'bestaudio/best',
                 'outtmpl': str(audio_path),
                 'writethumbnail': True,
-                'writeinfojson': True,
+                'writeinfojson': False,
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
@@ -276,98 +276,39 @@ class YouTubeDownloader:
         return results
     
     def _get_ffmpeg_location(self) -> Optional[str]:
-        """Find FFmpeg location on the system"""
+        """Find FFmpeg location, always prioritize project ffmpeg/bin first"""
         import os
         import shutil
         import subprocess
+        from pathlib import Path
+
+        # Always prioritize ffmpeg in project root first
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        project_ffmpeg = project_root / "ffmpeg" / "bin"
+        ffmpeg_exe = project_ffmpeg / "ffmpeg.exe"
         
-        # First try to find ffmpeg in PATH
+        if ffmpeg_exe.exists():
+            print(f"Using project ffmpeg: {project_ffmpeg}")
+            return str(project_ffmpeg)
+
+        # Fallback: try to find ffmpeg in PATH
         ffmpeg_path = shutil.which('ffmpeg')
         if ffmpeg_path:
+            print(f"Using system ffmpeg: {os.path.dirname(ffmpeg_path)}")
             return os.path.dirname(ffmpeg_path)
-          # Project-specific FFmpeg location (for deployment)
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-        project_ffmpeg = os.path.join(project_root, "ffmpeg", "bin")
-        
-        # If not in PATH, try locations in order of preference
+
+        # Last resort: try other common locations
         possible_paths = [
-            # 1. Project bundled FFmpeg (for deployment)
-            project_ffmpeg,
-            # 2. Current working directory
             os.path.join(os.getcwd(), "ffmpeg", "bin"),
-            # 3. Windows system locations
-            f"C:\\Users\\{os.environ.get('USERNAME', '')}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-7.1.1-full_build\\bin",
-            "C:\\ffmpeg\\bin",
+            f"C:\\ffmpeg\\bin",
             "C:\\Program Files\\ffmpeg\\bin",
             "C:\\Program Files (x86)\\ffmpeg\\bin"
         ]
         
         for path in possible_paths:
             if os.path.exists(os.path.join(path, "ffmpeg.exe")):
+                print(f"Using fallback ffmpeg: {path}")
                 return path
-        
-        # Try to use where command on Windows
-        try:
-            result = subprocess.run(['where', 'ffmpeg'], capture_output=True, text=True, shell=True)
-            if result.returncode == 0 and result.stdout.strip():
-                ffmpeg_exe_path = result.stdout.strip().split('\n')[0]
-                return os.path.dirname(ffmpeg_exe_path)
-        except:
-            pass
-        
+
+        print("FFmpeg not found in any location")
         return None
-    
-    def download_audio_direct(self, url: str, filename: Optional[str] = None) -> Tuple[bool, str, Optional[Dict]]:
-        """Download audio directly without FFmpeg conversion"""
-        try:
-            # Generate unique filename if not provided
-            if not filename:
-                filename = str(uuid.uuid4())
-            
-            audio_path = self.audio_dir / f"{filename}.%(ext)s"
-            
-            ydl_opts = {
-                'format': 'bestaudio[ext=m4a]/bestaudio/best',
-                'outtmpl': str(audio_path),
-                'writethumbnail': True,
-                'writeinfojson': True,
-                # Không dùng FFmpeg postprocessors
-                'prefer_ffmpeg': False,
-                'keepvideo': False,
-            }
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                # Extract info first
-                info = ydl.extract_info(url, download=False)
-                
-                # Download
-                ydl.download([url])
-                
-                # Tìm file audio đã download (có thể là .m4a, .webm, .opus)
-                audio_file = None
-                for ext in ['m4a', 'webm', 'opus', 'mp4']:
-                    potential_file = self.audio_dir / f"{filename}.{ext}"
-                    if potential_file.exists():
-                        audio_file = potential_file
-                        break
-                
-                if not audio_file:
-                    return False, "Audio file not found after download", None
-                  # Find thumbnail file and move it to correct directory
-                thumbnail_file = None
-                for ext in ['jpg', 'jpeg', 'png', 'webp']:
-                    potential_thumb = self.audio_dir / f"{filename}.{ext}"
-                    if potential_thumb.exists():
-                        # Move thumbnail to thumbnail directory
-                        target_thumb = self.thumbnail_dir / f"{filename}.{ext}"
-                        potential_thumb.rename(target_thumb)
-                        thumbnail_file = target_thumb
-                        break
-                
-                # Prepare song data
-                song_data = self._extract_song_data(info, str(audio_file), str(thumbnail_file) if thumbnail_file else None)
-                
-                return True, str(audio_file), song_data
-                
-        except Exception as e:
-            return False, f"Download failed: {str(e)}", None
