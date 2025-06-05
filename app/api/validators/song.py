@@ -61,14 +61,27 @@ class SongResponse(SongBase):
 
 class YouTubeDownloadRequest(BaseModel):
     url: str = Field(..., min_length=1)
-    download_audio: bool = Field(default=True)
-    quality: str = Field(default='best')
+    download_audio: bool = Field(default=True)   # Mặc định = True, client không cần truyền
+    quality: str = Field(default='best')         # Mặc định = 'best', client không cần truyền
     
     @field_validator('quality')
     @classmethod
     def validate_quality(cls, v):
         if v not in ['best', 'worst', 'bestaudio', 'worstaudio']:
             raise ValueError('Quality must be one of: best, worst, bestaudio, worstaudio')
+        return v
+
+# Thêm class đơn giản chỉ có URL
+class SimpleDownloadRequest(BaseModel):
+    url: str = Field(..., min_length=1, description="YouTube URL to download")
+    
+    @field_validator('url')
+    @classmethod
+    def validate_youtube_url(cls, v):
+        import re
+        youtube_regex = r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/'
+        if not re.search(youtube_regex, v):
+            raise ValueError('Invalid YouTube URL')
         return v
 
 class YouTubeDownloadResponse(BaseModel):

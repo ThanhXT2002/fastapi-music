@@ -8,6 +8,9 @@ load_dotenv()
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FastAPI Music API"
     API_PREFIX: str = "/api/v1"
+    
+    # Base URL for serving static files
+    BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
       
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./music.db")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")

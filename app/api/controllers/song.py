@@ -21,6 +21,7 @@ class SongController:
     def _convert_to_response(self, song) -> SongResponse:
         """Helper method to convert Song model to SongResponse"""
         import json
+        from app.config.config import settings
         
         try:
             # Parse JSON fields if they exist
@@ -45,6 +46,15 @@ class SongController:
                 except:
                     keywords = None
             
+            # Helper function to convert relative URLs to absolute URLs
+            def make_absolute_url(url):
+                if not url:
+                    return url
+                if url.startswith('http'):
+                    return url  # Already absolute
+                base_url = settings.BASE_URL.rstrip('/')
+                return f"{base_url}{url}" if url.startswith('/') else f"{base_url}/{url}"
+            
             return SongResponse(
                 id=getattr(song, 'id', str(uuid.uuid4())),
                 title=getattr(song, 'title', 'Unknown Title'),
@@ -54,8 +64,8 @@ class SongController:
                 duration=getattr(song, 'duration', 0),
                 genre=genre,
                 release_date=getattr(song, 'release_date', None),
-                thumbnail_url=getattr(song, 'thumbnail_url', None),
-                audio_url=getattr(song, 'audio_url', None),
+                thumbnail_url=make_absolute_url(getattr(song, 'thumbnail_url', None)),
+                audio_url=make_absolute_url(getattr(song, 'audio_url', None)),
                 lyrics=getattr(song, 'lyrics', None),
                 has_lyrics=getattr(song, 'has_lyrics', False),
                 keywords=keywords,
@@ -89,21 +99,41 @@ class SongController:
                 user_id=None,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
-            )
-
+            )    
+    
     def download_from_youtube(self, request: YouTubeDownloadRequest, current_user = None) -> YouTubeDownloadResponse:
         """Download song from YouTube"""
+        from app.config.config import settings
+        
         try:
+            # Helper function to convert relative URLs to absolute URLs
+            def make_absolute_url(url):
+                if not url:
+                    return url
+                if url.startswith('http'):
+                    return url  # Already absolute
+                base_url = settings.BASE_URL.rstrip('/')
+                return f"{base_url}{url}" if url.startswith('/') else f"{base_url}/{url}"
+            
             # Check if already downloaded
             existing_song = self.song_repo.find_by_youtube_url(request.url)
             if existing_song:
+                # Convert local_path or audio_url to absolute URL for download_path
+                download_path = make_absolute_url(getattr(existing_song, 'audio_url', None))
+                if not download_path and hasattr(existing_song, 'local_path'):
+                    # If no audio_url, construct from local_path
+                    import os
+                    filename = os.path.basename(existing_song.local_path) if existing_song.local_path else None
+                    if filename:
+                        download_path = f"{settings.BASE_URL.rstrip('/')}/uploads/audio/{filename}"
+                
                 return YouTubeDownloadResponse(
                     success=True,
                     message='Song already downloaded',
                     song=self._convert_to_response(existing_song),
-                    download_path=existing_song.local_path
-                )
-              # Download from YouTube
+                    download_path=download_path                )
+            
+            # Download from YouTube
             success, result, song_data = self.youtube_downloader.download_audio(request.url)
             
             if not success:
@@ -117,12 +147,15 @@ class SongController:
             song_data['downloaded_at'] = datetime.utcnow()
             song = self.song_repo.create_song(song_data, user_id)
             
+            # Get absolute URL for download_path
+            download_path = make_absolute_url(song_data.get('audio_url', result))
+            
             # Create response with complete information
             return YouTubeDownloadResponse(
                 success=True,
                 message='Song downloaded successfully',
                 song=self._convert_to_response(song),
-                download_path=song_data.get('audio_url', result)  # Use HTTP URL instead of file path
+                download_path=download_path
             )
             
         except Exception as e:

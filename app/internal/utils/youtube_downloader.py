@@ -226,9 +226,10 @@ class YouTubeDownloader:
         audio_filename = os.path.basename(audio_path) if audio_path else None
         thumbnail_filename = os.path.basename(thumbnail_path) if thumbnail_path else None
         
-        # Construct URLs for serving the files (use forward slashes for web URLs)
-        audio_url = f"/uploads/audio/{audio_filename}" if audio_filename else None
-        thumbnail_url = f"/uploads/thumbnails/{thumbnail_filename}" if thumbnail_filename else None
+        # Construct full URLs for serving the files (with domain)
+        base_url = settings.BASE_URL.rstrip('/')
+        audio_url = f"{base_url}/uploads/audio/{audio_filename}" if audio_filename else None
+        thumbnail_url = f"{base_url}/uploads/thumbnails/{thumbnail_filename}" if thumbnail_filename else None
         
         song_data = {
             'title': title,
