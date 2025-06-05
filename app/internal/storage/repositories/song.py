@@ -24,5 +24,31 @@ class SongRepository(BaseRepository[Song]):
         return super().create(song_data)
     
     def find_by_youtube_url(self, url: str) -> Optional[Song]:
-        """Find song by YouTube URL - check source_url field"""
-        return self.db.query(Song).filter(Song.source_url == url).first()
+        """Find song by YouTube video ID extracted from URL"""
+        video_id = self._extract_youtube_id(url)
+        if not video_id:
+            return None
+        
+        # Tìm bài hát có source_url chứa video_id
+        from sqlalchemy import or_
+        return self.db.query(Song).filter(
+            Song.source_url.like(f"%{video_id}%")
+        ).first()
+
+    def _extract_youtube_id(self, url: str) -> Optional[str]:
+        """Extract YouTube video ID from URL"""
+        import re
+        
+        # Các mẫu regex cho các định dạng URL khác nhau
+        patterns = [
+            r'(?:v=|\/)([\w\-]{11})(?:[&#?]|$)',  # youtube.com/watch?v=ID
+            r'(?:youtu\.be\/)([\w\-]{11})(?:[&#?]|$)',  # youtu.be/ID
+            r'(?:embed\/)([\w\-]{11})(?:[&#?]|$)'  # youtube.com/embed/ID
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        
+        return None
