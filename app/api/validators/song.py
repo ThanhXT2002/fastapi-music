@@ -6,28 +6,16 @@ from datetime import datetime
 class SongBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     artist: str = Field(..., min_length=1, max_length=255)
-    artists: Optional[List[str]] = None
     album: Optional[str] = None
-    duration: int = Field(..., ge=0)  # Changed from gt=0 to ge=0 to allow 0 duration
-    genre: Optional[List[str]] = None
-    release_date: Optional[str] = None
+    duration: int = Field(..., ge=0)  # Allow 0 duration
     
     thumbnail_url: Optional[str] = None
     audio_url: Optional[str] = None
-    lyrics: Optional[str] = None
-    has_lyrics: Optional[bool] = False
-    keywords: Optional[List[str]] = None
-    source: Optional[str] = Field(default='youtube')
-    source_url: Optional[str] = None  # Original source URL (YouTube, etc.)
-    bitrate: Optional[int] = None
-    language: Optional[str] = None
+    local_path: Optional[str] = None
     
-    @field_validator('source')
-    @classmethod
-    def validate_source(cls, v):
-        if v not in ['local', 'youtube', 'spotify']:
-            raise ValueError('Source must be one of: local, youtube, spotify')
-        return v
+    is_favorite: bool = Field(default=False)
+    keywords: Optional[str] = None  # JSON string of keywords array
+    source_url: Optional[str] = None  # Original source URL (YouTube, etc.)
     
     @field_validator('keywords')
     @classmethod
@@ -36,23 +24,18 @@ class SongBase(BaseModel):
         if isinstance(v, str):
             try:
                 import json
-                return json.loads(v)
+                json.loads(v)  # Just validate it's valid JSON
+                return v
             except:
                 # If it's not valid JSON, treat as a single keyword
-                return [v] if v else []
+                return json.dumps([v]) if v else None
+        elif isinstance(v, list):
+            import json
+            return json.dumps(v)
         return v
 
 class SongResponse(SongBase):
     id: str
-    is_downloaded: bool
-    downloaded_at: Optional[datetime]
-    local_path: Optional[str]
-    
-    is_favorite: bool
-    play_count: int
-    last_played_at: Optional[datetime]
-    
-    user_id: Optional[int]
     created_at: datetime
     updated_at: datetime
     

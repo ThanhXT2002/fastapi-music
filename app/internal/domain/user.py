@@ -2,6 +2,7 @@ from sqlalchemy import Boolean, Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.config.database import Base
+from app.internal.domain.user_songs import user_songs
 
 class User(Base):
     __tablename__ = "users"
@@ -17,5 +18,5 @@ class User(Base):
     
     google_id = Column(String(255), unique=True, nullable=True)
     
-    # Relationship with songs
-    songs = relationship("Song", back_populates="user")
+    # Relationship with songs - Many-to-many
+    songs = relationship("Song", secondary=user_songs, back_populates="users")

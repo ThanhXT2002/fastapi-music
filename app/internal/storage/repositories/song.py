@@ -8,20 +8,28 @@ from app.internal.storage.repositories.repository import BaseRepository
 class SongRepository(BaseRepository[Song]):
     def __init__(self, db: Session):
         super().__init__(Song, db)
+    
     def create_song(self, song_data: dict, user_id: Optional[int] = None) -> Song:
         """Create a new song"""
         song_data['id'] = str(uuid.uuid4())
-        song_data['user_id'] = user_id
         
-        # Convert list fields to JSON strings
-        if 'artists' in song_data and song_data['artists']:
-            song_data['artists'] = json.dumps(song_data['artists'])
-        if 'genre' in song_data and song_data['genre']:
-            song_data['genre'] = json.dumps(song_data['genre'])
-        if 'keywords' in song_data and song_data['keywords']:
+        # Convert keywords to JSON string if it's a list
+        if 'keywords' in song_data and isinstance(song_data['keywords'], list):
             song_data['keywords'] = json.dumps(song_data['keywords'])
             
-        return super().create(song_data)
+        # Create song without user_id since we're using many-to-many relationship
+        song = super().create(song_data)
+        
+        # If user_id is provided, create the relationship
+        if user_id:
+            from app.internal.domain.user import User
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if user:
+                song.users.append(user)
+                self.db.commit()
+                self.db.refresh(song)
+        
+        return song
     
     def find_by_youtube_url(self, url: str) -> Optional[Song]:
         """Find song by YouTube video ID extracted from URL with retry logic"""
@@ -43,30 +51,21 @@ class SongRepository(BaseRepository[Song]):
                 print(f"Database query attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt < max_retries - 1:
                     # Reconnect database session
-                    try:
-                        self.db.rollback()
-                        self.db.close()
-                        # Get a new session
-                        from app.config.database import SessionLocal
-                        self.db = SessionLocal()
-                    except:
-                        pass
-                    import time
-                    time.sleep(1)  # Wait 1 second before retry
+                    self.db.rollback()
                     continue
                 else:
-                    print(f"Failed to query database after {max_retries} attempts")
-                    return None
-
+                    raise e
+    
     def _extract_youtube_id(self, url: str) -> Optional[str]:
         """Extract YouTube video ID from URL"""
         import re
         
-        # Các mẫu regex cho các định dạng URL khác nhau
+        # Các pattern phổ biến cho YouTube URL
         patterns = [
-            r'(?:v=|\/)([\w\-]{11})(?:[&#?]|$)',  # youtube.com/watch?v=ID
-            r'(?:youtu\.be\/)([\w\-]{11})(?:[&#?]|$)',  # youtu.be/ID
-            r'(?:embed\/)([\w\-]{11})(?:[&#?]|$)'  # youtube.com/embed/ID
+            r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+            r'(?:embed\/)([0-9A-Za-z_-]{11})',
+            r'(?:watch\?v=)([0-9A-Za-z_-]{11})',
+            r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})'
         ]
         
         for pattern in patterns:

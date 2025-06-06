@@ -229,20 +229,17 @@ class YouTubeDownloader:
         base_url = settings.BASE_URL.rstrip('/')
         audio_url = f"{base_url}/uploads/audio/{audio_filename}" if audio_filename else None
         thumbnail_url = f"{base_url}/uploads/thumbnails/{thumbnail_filename}" if thumbnail_filename else None
-        
         song_data = {
-            'title': title,
-            'artist': artist,
-            'duration': duration,
-            'release_date': release_date,
-            'audio_url': audio_url,  # HTTP URL to serve the audio file
-            'source_url': info.get('webpage_url'),  # Original YouTube URL
-            'local_path': audio_path,  # Local file system path
-            'thumbnail_url': thumbnail_url,  # HTTP URL to serve the thumbnail
-            'keywords': keywords[:10] if keywords else [],  # Limit to 10 keywords
-            'source': 'youtube',
-            'is_downloaded': True,
-            'has_lyrics': False,  # Could be enhanced to extract lyrics
+        'title': title,
+        'artist': artist,
+        'album': None,  # YouTube videos don't have album info typically
+        'duration': duration,
+        'audio_url': audio_url,  # HTTP URL to serve the audio file
+        'source_url': info.get('webpage_url'),  # Original YouTube URL
+        'local_path': audio_path,  # Local file system path
+        'thumbnail_url': thumbnail_url,  # HTTP URL to serve the thumbnail
+        'keywords': json.dumps(keywords[:10]) if keywords else None,  # Convert to JSON string
+        'is_favorite': False,  # Default value
         }
         
         return song_data, thumbnail_path  # Return thumbnail_path separately

@@ -22,31 +22,17 @@ class SongController:
         self.song_repo = SongRepository(db)
         self.youtube_downloader = YouTubeDownloader()
         self.cloudinary_service = CloudinaryService()
-    
     def _convert_to_response(self, song) -> SongResponse:
         """Helper method to convert Song model to SongResponse"""
         try:
             # Parse JSON fields if they exist
-            artists = song.artists
-            if isinstance(artists, str):
-                try:
-                    artists = json.loads(artists)
-                except:
-                    artists = None
-                    
-            genre = song.genre
-            if isinstance(genre, str):
-                try:
-                    genre = json.loads(genre)
-                except:
-                    genre = None
-                    
             keywords = song.keywords
             if isinstance(keywords, str):
                 try:
-                    keywords = json.loads(keywords)
+                    keywords_list = json.loads(keywords)
+                    keywords = json.dumps(keywords_list)  # Keep as JSON string for response
                 except:
-                    keywords = None
+                    keywords = json.dumps([keywords]) if keywords else None
             
             # Helper function to convert relative URLs to absolute URLs
             def make_absolute_url(url):
@@ -61,27 +47,14 @@ class SongController:
                 id=getattr(song, 'id', str(uuid.uuid4())),
                 title=getattr(song, 'title', 'Unknown Title'),
                 artist=getattr(song, 'artist', 'Unknown Artist'),
-                artists=artists,
                 album=getattr(song, 'album', None),
                 duration=getattr(song, 'duration', 0),
-                genre=genre,
-                release_date=getattr(song, 'release_date', None),
                 thumbnail_url=make_absolute_url(getattr(song, 'thumbnail_url', None)),
                 audio_url=make_absolute_url(getattr(song, 'audio_url', None)),
-                lyrics=getattr(song, 'lyrics', None),
-                has_lyrics=getattr(song, 'has_lyrics', False),
-                keywords=keywords,
-                source=getattr(song, 'source', 'youtube'),
-                source_url=getattr(song, 'source_url', None),
-                bitrate=getattr(song, 'bitrate', None),
-                language=getattr(song, 'language', None),
-                is_downloaded=getattr(song, 'is_downloaded', True),
-                downloaded_at=getattr(song, 'downloaded_at', None),
                 local_path=getattr(song, 'local_path', None),
                 is_favorite=getattr(song, 'is_favorite', False),
-                play_count=getattr(song, 'play_count', 0),
-                last_played_at=getattr(song, 'last_played_at', None),
-                user_id=getattr(song, 'user_id', None),
+                keywords=keywords,
+                source_url=getattr(song, 'source_url', None),
                 created_at=getattr(song, 'created_at', datetime.utcnow()),
                 updated_at=getattr(song, 'updated_at', datetime.utcnow())
             )
@@ -91,17 +64,17 @@ class SongController:
                 id=str(uuid.uuid4()),
                 title='Unknown Title',
                 artist='Unknown Artist',
+                album=None,
                 duration=0,
-                is_downloaded=True,
-                downloaded_at=datetime.utcnow(),
+                thumbnail_url=None,
+                audio_url=None,
                 local_path=None,
                 is_favorite=False,
-                play_count=0,
-                last_played_at=None,
-                user_id=None,
+                keywords=None,
+                source_url=None,
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
-            )    
+            )
             
     def _is_valid_youtube_url(self, url: str) -> bool:
         """Validate YouTube URL format"""
@@ -261,11 +234,8 @@ class SongController:
                 print(f"❌ Cloudinary upload error: {cloudinary_error}")
                 import traceback
                 traceback.print_exc()
-                # Continue with local files as fallback
-            
-            # Save to database
+                # Continue with local files as fallback            # Save to database
             user_id = current_user.id if current_user else None
-            song_data['downloaded_at'] = datetime.utcnow()
             song = self.song_repo.create_song(song_data, user_id)
             
             # Get download path (prioritize Cloudinary URL)
