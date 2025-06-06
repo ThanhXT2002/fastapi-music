@@ -1,5 +1,4 @@
-# filepath: e:\API\fastapi-music\app\api\validators\song.py
-from pydantic import BaseModel, Field, field_validator
+﻿from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict
 from datetime import datetime
 
@@ -11,7 +10,6 @@ class SongBase(BaseModel):
     
     thumbnail_url: Optional[str] = None
     audio_url: Optional[str] = None
-    local_path: Optional[str] = None
     
     is_favorite: bool = Field(default=False)
     keywords: Optional[str] = None  # JSON string of keywords array
@@ -20,7 +18,9 @@ class SongBase(BaseModel):
     @field_validator('keywords')
     @classmethod
     def validate_keywords(cls, v):
-        # Handle case where keywords might be passed as a JSON string
+        # Handle case where keywords might be passed as a JSON string or list
+        if v is None:
+            return None
         if isinstance(v, str):
             try:
                 import json
@@ -44,8 +44,8 @@ class SongResponse(SongBase):
 
 class YouTubeDownloadRequest(BaseModel):
     url: str = Field(..., min_length=1)
-    download_audio: bool = Field(default=True)   # Mặc định = True, client không cần truyền
-    quality: str = Field(default='best')         # Mặc định = 'best', client không cần truyền
+    download_audio: bool = Field(default=True)
+    quality: str = Field(default='best')
     
     @field_validator('quality')
     @classmethod
@@ -54,7 +54,6 @@ class YouTubeDownloadRequest(BaseModel):
             raise ValueError('Quality must be one of: best, worst, bestaudio, worstaudio')
         return v
 
-# Thêm class đơn giản chỉ có URL
 class SimpleDownloadRequest(BaseModel):
     url: str = Field(..., min_length=1, description="YouTube URL to download")
     
@@ -71,4 +70,4 @@ class YouTubeDownloadResponse(BaseModel):
     success: bool
     message: str
     song: Optional[SongResponse] = None
-    download_path: Optional[str] = None  # HTTP URL to access the downloaded audio file
+    download_path: Optional[str] = None

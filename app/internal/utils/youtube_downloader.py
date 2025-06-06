@@ -221,25 +221,23 @@ class YouTubeDownloader:
         keywords = tags + categories
         
         # Create HTTP URLs for serving files
-        import os
+        
         audio_filename = os.path.basename(audio_path) if audio_path else None
         thumbnail_filename = os.path.basename(thumbnail_path) if thumbnail_path else None
-        
-        # Construct full URLs for serving the files (with domain)
+          # Construct full URLs for serving the files (with domain)
         base_url = settings.BASE_URL.rstrip('/')
         audio_url = f"{base_url}/uploads/audio/{audio_filename}" if audio_filename else None
         thumbnail_url = f"{base_url}/uploads/thumbnails/{thumbnail_filename}" if thumbnail_filename else None
         song_data = {
-        'title': title,
-        'artist': artist,
-        'album': None,  # YouTube videos don't have album info typically
-        'duration': duration,
-        'audio_url': audio_url,  # HTTP URL to serve the audio file
-        'source_url': info.get('webpage_url'),  # Original YouTube URL
-        'local_path': audio_path,  # Local file system path
-        'thumbnail_url': thumbnail_url,  # HTTP URL to serve the thumbnail
-        'keywords': json.dumps(keywords[:10]) if keywords else None,  # Convert to JSON string
-        'is_favorite': False,  # Default value
+            'title': title,
+            'artist': artist,
+            'album': None,  # YouTube videos don't have album info typically
+            'duration': duration,
+            'source_url': info.get('webpage_url'),  # Original YouTube URL
+            'audio_local_path': audio_path,  # Local audio file path
+            'thumbnail_local_path': thumbnail_path,  # Local thumbnail file path
+            'keywords': json.dumps(keywords[:10]) if keywords else None,  # Convert to JSON string
+            'is_favorite': False,  # Default value
         }
         
         return song_data, thumbnail_path  # Return thumbnail_path separately

@@ -12,11 +12,13 @@ class Song(Base):
     artist = Column(String(255), nullable=False)
     album = Column(String(255), nullable=True)
     duration = Column(Integer, nullable=False)  # in seconds
-
-    thumbnail_url = Column(String(500), nullable=True)  
-    audio_url = Column(String(500), nullable=True)     
-    local_path = Column(String(500), nullable=True)
-    
+    #url của bài hát trên cloudinary
+    thumbnail_url_cloudinary = Column(String(500), nullable=True)  
+    audio_url_cloudinary = Column(String(500), nullable=True)
+    #url của bài hát trên hệ thống server
+    thumbnail_local_path = Column(String(500), nullable=True)  
+    audio_local_path = Column(String(500), nullable=True)  
+         
     # User interaction
     is_favorite = Column(Boolean, default=False)
     

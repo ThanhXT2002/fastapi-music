@@ -4,6 +4,10 @@ from datetime import datetime
 import uuid
 import re  
 import json
+import os
+import asyncio
+import threading
+import traceback
 from app.config.config import settings
 
 from app.config.database import get_db
@@ -16,91 +20,155 @@ from app.api.validators.song import (
 )
 from app.api.middleware.auth import get_current_user_optional
 
-class SongController:    
+class SongController:
     def __init__(self, db: Session = Depends(get_db)):
         self.db = db
         self.song_repo = SongRepository(db)
         self.youtube_downloader = YouTubeDownloader()
         self.cloudinary_service = CloudinaryService()
+    
     def _convert_to_response(self, song) -> SongResponse:
         """Helper method to convert Song model to SongResponse"""
         try:
-            # Parse JSON fields if they exist
-            keywords = song.keywords
-            if isinstance(keywords, str):
-                try:
-                    keywords_list = json.loads(keywords)
-                    keywords = json.dumps(keywords_list)  # Keep as JSON string for response
-                except:
-                    keywords = json.dumps([keywords]) if keywords else None
+            # Parse JSON fields if they exist (keep as string for Pydantic)
+            keywords = getattr(song, 'keywords', None)
+            # Don't parse to list here - keep as JSON string for Pydantic validator
             
-            # Helper function to convert relative URLs to absolute URLs
-            def make_absolute_url(url):
-                if not url:
-                    return url
-                if url.startswith('http'):
-                    return url  # Already absolute
+            # Helper function to convert local file paths to serving URLs
+            def make_serving_url(local_path):
+                if not local_path:
+                    return None
+                if local_path.startswith('http'):
+                    return local_path
+                
+                # Convert full file path to relative URL path
                 base_url = settings.BASE_URL.rstrip('/')
-                return f"{base_url}{url}" if url.startswith('/') else f"{base_url}/{url}"
+                
+                # Extract filename from full path
+                import os
+                filename = os.path.basename(local_path)
+                
+                # Determine if it's audio or thumbnail based on path
+                if 'audio' in local_path.lower():
+                    return f"{base_url}/uploads/audio/{filename}"
+                elif 'thumbnail' in local_path.lower():
+                    return f"{base_url}/uploads/thumbnails/{filename}"
+                else:
+                    return None
             
-            return SongResponse(
-                id=getattr(song, 'id', str(uuid.uuid4())),
-                title=getattr(song, 'title', 'Unknown Title'),
-                artist=getattr(song, 'artist', 'Unknown Artist'),
-                album=getattr(song, 'album', None),
-                duration=getattr(song, 'duration', 0),
-                thumbnail_url=make_absolute_url(getattr(song, 'thumbnail_url', None)),
-                audio_url=make_absolute_url(getattr(song, 'audio_url', None)),
-                local_path=getattr(song, 'local_path', None),
-                is_favorite=getattr(song, 'is_favorite', False),
-                keywords=keywords,
-                source_url=getattr(song, 'source_url', None),
-                created_at=getattr(song, 'created_at', datetime.utcnow()),
-                updated_at=getattr(song, 'updated_at', datetime.utcnow())
-            )
+            # Prioritize Cloudinary URLs for existing songs, local paths for new ones
+            thumbnail_url = getattr(song, 'thumbnail_url_cloudinary', None) or make_serving_url(getattr(song, 'thumbnail_local_path', None))
+            audio_url = getattr(song, 'audio_url_cloudinary', None) or make_serving_url(getattr(song, 'audio_local_path', None))
+            
+            return SongResponse.model_validate({
+                'id': getattr(song, 'id', str(uuid.uuid4())),
+                'title': getattr(song, 'title', 'Unknown Title'),
+                'artist': getattr(song, 'artist', 'Unknown Artist'),
+                'album': getattr(song, 'album', None),
+                'duration': getattr(song, 'duration', 0),
+                'thumbnail_url': thumbnail_url,
+                'audio_url': audio_url,
+                'is_favorite': getattr(song, 'is_favorite', False),
+                'keywords': keywords,
+                'source_url': getattr(song, 'source_url', None),
+                'created_at': getattr(song, 'created_at', datetime.utcnow()),
+                'updated_at': getattr(song, 'updated_at', datetime.utcnow())
+            })
         except Exception as e:
             print(f"Error in _convert_to_response: {e}")
-            return SongResponse(
-                id=str(uuid.uuid4()),
-                title='Unknown Title',
-                artist='Unknown Artist',
-                album=None,
-                duration=0,
-                thumbnail_url=None,
-                audio_url=None,
-                local_path=None,
-                is_favorite=False,
-                keywords=None,
-                source_url=None,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
+            traceback.print_exc()
+            return SongResponse.model_validate({
+                'id': str(uuid.uuid4()),
+                'title': 'Unknown Title',
+                'artist': 'Unknown Artist',
+                'album': None,
+                'duration': 0,
+                'thumbnail_url': None,
+                'audio_url': None,
+                'is_favorite': False,
+                'keywords': None,
+                'source_url': None,
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow()
+            })
             
     def _is_valid_youtube_url(self, url: str) -> bool:
         """Validate YouTube URL format"""
-        # Các pattern phổ biến cho YouTube URLs
         youtube_patterns = [
-            r'(?:https?://)(?:www\.)?youtube\.com/watch\?v=[\w\-]{11}',  # youtube.com/watch?v=ID
-            r'(?:https?://)(?:www\.)?youtu\.be/[\w\-]{11}',             # youtu.be/ID
-            r'(?:https?://)(?:www\.)?youtube\.com/embed/[\w\-]{11}',    # youtube.com/embed/ID
-            r'(?:https?://)(?:www\.)?youtube\.com/v/[\w\-]{11}',        # youtube.com/v/ID
+            r'(?:https?://)(?:www\.)?youtube\.com/watch\?v=[\w\-]{11}',
+            r'(?:https?://)(?:www\.)?youtu\.be/[\w\-]{11}',
+            r'(?:https?://)(?:www\.)?youtube\.com/embed/[\w\-]{11}',
+            r'(?:https?://)(?:www\.)?youtube\.com/v/[\w\-]{11}',
         ]
-        
         return any(re.match(pattern, url) for pattern in youtube_patterns)
     
-    def download_from_youtube(self, request: YouTubeDownloadRequest, current_user = None) -> YouTubeDownloadResponse:
-        """Download song from YouTube"""
-        from app.config.config import settings
-        
+    def _background_upload_to_cloudinary(self, song_id: str, audio_path: str, thumbnail_path: str, title: str):
+        """Background task to upload files to Cloudinary and update database"""
         try:
-            # 1. VALIDATION URL FORMAT TRƯỚC TIÊN
+            print(f"🚀 [Background] Starting Cloudinary upload for: {title}")
+            
+            # Upload to Cloudinary
+            cloudinary_result = self.cloudinary_service.upload_media_files(
+                audio_path=audio_path,
+                thumbnail_path=thumbnail_path,
+                base_filename=title
+            )
+            
+            if cloudinary_result.get('success'):
+                # Prepare update data
+                update_data = {}
+                
+                if cloudinary_result.get('audio') and cloudinary_result['audio'].get('success'):
+                    update_data['audio_url_cloudinary'] = cloudinary_result['audio']['url']
+                    print(f"✅ [Background] Audio uploaded to Cloudinary: {cloudinary_result['audio']['url']}")
+                
+                if cloudinary_result.get('thumbnail') and cloudinary_result['thumbnail'].get('success'):
+                    update_data['thumbnail_url_cloudinary'] = cloudinary_result['thumbnail']['url']
+                    print(f"✅ [Background] Thumbnail uploaded to Cloudinary: {cloudinary_result['thumbnail']['url']}")
+                
+                # Update database with Cloudinary URLs
+                if update_data:
+                    # Create new database session for background task
+                    from app.config.database import SessionLocal
+                    db = SessionLocal()
+                    try:
+                        song_repo = SongRepository(db)
+                        song_repo.update_song_cloudinary_urls(song_id, update_data)
+                        print(f"✅ [Background] Database updated for song: {song_id}")
+                        
+                        # Clean up local files after successful upload
+                        files_to_cleanup = []
+                        if cloudinary_result.get('audio') and cloudinary_result['audio'].get('success'):
+                            files_to_cleanup.append(audio_path)
+                        if cloudinary_result.get('thumbnail') and cloudinary_result['thumbnail'].get('success') and thumbnail_path:
+                            files_to_cleanup.append(thumbnail_path)
+                        
+                        if files_to_cleanup:
+                            self.cloudinary_service.cleanup_local_files(files_to_cleanup)
+                            print(f"🗑️ [Background] Local files cleaned up")
+                        
+                    finally:
+                        db.close()
+                        
+                print(f"✅ [Background] Cloudinary upload completed for: {title}")
+            else:
+                print(f"❌ [Background] Cloudinary upload failed: {cloudinary_result.get('message')}")
+                
+        except Exception as e:
+            print(f"❌ [Background] Error in Cloudinary upload: {e}")
+            traceback.print_exc()
+    
+    def download_from_youtube(self, request: YouTubeDownloadRequest, current_user = None) -> YouTubeDownloadResponse:
+        """Download song from YouTube with new workflow"""
+        try:
+            # 1. Validation URL format
             if not self._is_valid_youtube_url(request.url):
                 return YouTubeDownloadResponse(
                     success=False,
                     message='Invalid YouTube URL format'
                 )
                 
-            # 2. EXTRACT INFO ĐỂ VALIDATE (không download)
+            # 2. Extract info để validate
             try:
                 info = self.youtube_downloader.extract_info(request.url)
                 if not info:
@@ -126,9 +194,9 @@ class SongController:
                         message=f'Cannot access video: {error_msg}'
                     )
                     
-            # 3. KIỂM TRA DURATION (MAX 2 TIẾNG = 7200 SECONDS)
+            # 3. Check duration (max 2 hours)
             duration = info.get('duration', 0)
-            if duration and duration > 7200:  # 2 hours
+            if duration and duration > 7200:
                 minutes = duration // 60
                 hours = minutes // 60
                 mins = minutes % 60
@@ -137,119 +205,95 @@ class SongController:
                     message=f'Video too long ({hours}h {mins}m). Maximum 2 hours allowed.'
                 )
             
-            # 4. KIỂM TRA LOẠI CONTENT (tránh livestream, shorts quá ngắn)
+            # 4. Check content type
             if info.get('is_live'):
                 return YouTubeDownloadResponse(
                     success=False,
                     message='Cannot download live streams'
                 )
             
-            if duration and duration < 10:  # Tránh video quá ngắn (< 10 giây)
+            if duration and duration < 10:
                 return YouTubeDownloadResponse(
                     success=False,
                     message='Video too short (minimum 10 seconds required)'
                 )
+              # Helper function for absolute URLs  
+            def make_absolute_url(file_path):
+                if not file_path:
+                    return None
+                if file_path.startswith('http'):
+                    return file_path
                 
-            
-            # Helper function to convert relative URLs to absolute URLs
-            def make_absolute_url(url):
-                if not url:
-                    return url
-                if url.startswith('http'):
-                    return url  # Already absolute
+                # Extract filename from full path
+                filename = os.path.basename(file_path)
                 base_url = settings.BASE_URL.rstrip('/')
-                return f"{base_url}{url}" if url.startswith('/') else f"{base_url}/{url}"
-            
-            # Check if already downloaded
+                
+                # Determine if it's audio or thumbnail based on path
+                if 'audio' in file_path.lower():
+                    return f"{base_url}/uploads/audio/{filename}"
+                elif 'thumbnail' in file_path.lower():
+                    return f"{base_url}/uploads/thumbnails/{filename}"
+                else:
+                    return None
+              # Check if already exists - return Cloudinary URLs
             existing_song = self.song_repo.find_by_youtube_url(request.url)
             if existing_song:
-                # Convert local_path or audio_url to absolute URL for download_path
-                download_path = make_absolute_url(getattr(existing_song, 'audio_url', None))
-                if not download_path and hasattr(existing_song, 'local_path'):                    # If no audio_url, construct from local_path
-                    import os
-                    filename = os.path.basename(existing_song.local_path) if existing_song.local_path else None
-                    if filename:
-                        download_path = f"{settings.BASE_URL.rstrip('/')}/uploads/audio/{filename}"
+                # For existing songs, prioritize Cloudinary URLs
+                download_path = getattr(existing_song, 'audio_url_cloudinary', None)
+                if not download_path:
+                    download_path = make_absolute_url(getattr(existing_song, 'audio_local_path', None))
                 
                 return YouTubeDownloadResponse(
                     success=True,
-                    message='Song already downloaded',
+                    message='Song already exists (from Cloudinary)',
                     song=self._convert_to_response(existing_song),
                     download_path=download_path
-                )
-              # Download from YouTube
-            success, result, song_data, thumbnail_path = self.youtube_downloader.download_audio(request.url)
+                )            # Download from YouTube
+            success, audio_path, song_data, thumbnail_path = self.youtube_downloader.download_audio(request.url)
             
             if not success:
                 return YouTubeDownloadResponse(
                     success=False,
-                    message=result
+                    message=audio_path  # audio_path contains error message when success=False
                 )
             
-            # Upload to Cloudinary
-            try:
-                print(f"🚀 Starting Cloudinary upload for: {song_data.get('title')}")
-                print(f"   Audio path: {song_data.get('local_path')}")
-                print(f"   Thumbnail path: {thumbnail_path}")
-                
-                cloudinary_result = self.cloudinary_service.upload_media_files(
-                    audio_path=song_data.get('local_path'),
-                    thumbnail_path=thumbnail_path,
-                    base_filename=song_data.get('title', 'unknown')
-                )
-                
-                print(f"📊 Cloudinary result: {cloudinary_result}")
-                
-                if cloudinary_result.get('success'):
-                    # Update song_data with Cloudinary URLs (reuse existing fields)
-                    if cloudinary_result.get('audio') and cloudinary_result['audio'].get('success'):
-                        song_data['audio_url'] = cloudinary_result['audio']['url']
-                        print(f"✅ Audio uploaded to Cloudinary: {cloudinary_result['audio']['url']}")
-                    
-                    if cloudinary_result.get('thumbnail') and cloudinary_result['thumbnail'].get('success'):
-                        song_data['thumbnail_url'] = cloudinary_result['thumbnail']['url']
-                        print(f"✅ Thumbnail uploaded to Cloudinary: {cloudinary_result['thumbnail']['url']}")
-                    else:
-                        print(f"⚠️ Thumbnail not uploaded to Cloudinary, keeping local file")
-                    
-                    # Clean up local files after successful upload
-                    files_to_cleanup = []
-                    if cloudinary_result.get('audio') and cloudinary_result['audio'].get('success'):
-                        files_to_cleanup.append(song_data.get('local_path'))
-                    
-                    # If we have a thumbnail path from earlier, we can use it for cleanup
-                    if cloudinary_result.get('thumbnail') and cloudinary_result['thumbnail'].get('success') and thumbnail_path:
-                        files_to_cleanup.append(thumbnail_path)
-                    
-                    if files_to_cleanup:
-                        self.cloudinary_service.cleanup_local_files(files_to_cleanup)
-                    
-                    print(f"✅ Cloudinary upload completed for: {song_data.get('title')}")
-                    print(f"   Message: {cloudinary_result.get('message', 'Upload completed')}")
-                else:
-                    print(f"⚠️ Cloudinary upload failed, keeping local files: {cloudinary_result.get('message')}")
-                    # Keep local URLs as fallback
-                    
-            except Exception as cloudinary_error:
-                print(f"❌ Cloudinary upload error: {cloudinary_error}")
-                import traceback
-                traceback.print_exc()
-                # Continue with local files as fallback            # Save to database
+            # Debug: Print song_data to see what we get from YouTube downloader
+            print(f"🔍 [DEBUG] Song data from YouTube downloader: {song_data}")
+            
+            # Prepare song data with local paths (audio_path is the full path to downloaded file)
+            song_data['audio_local_path'] = audio_path
+            song_data['thumbnail_local_path'] = thumbnail_path
+            
+            print(f"🔍 [DEBUG] Song data before saving to DB: {song_data}")
+            
+            # Save to database with local paths
             user_id = current_user.id if current_user else None
             song = self.song_repo.create_song(song_data, user_id)
             
-            # Get download path (prioritize Cloudinary URL)
-            download_path = song_data.get('audio_url') or make_absolute_url(result)
-              # Create response with complete information
-            return YouTubeDownloadResponse(
+            print(f"🔍 [DEBUG] Song saved to DB: {song.__dict__}")
+            
+            # Return response immediately with local paths
+            download_path = make_absolute_url(song_data.get('audio_local_path'))
+            response = YouTubeDownloadResponse(
                 success=True,
-                message='Song downloaded and uploaded to cloud successfully',
+                message='Song downloaded successfully (uploading to cloud in background)',
                 song=self._convert_to_response(song),
                 download_path=download_path
             )
             
+            # Start background upload to Cloudinary
+            thread = threading.Thread(
+                target=self._background_upload_to_cloudinary,
+                args=(song.id, audio_path, thumbnail_path, song_data.get('title', 'unknown'))
+            )
+            thread.daemon = True
+            thread.start()
+            
+            return response
+            
         except Exception as e:
             print(f"Error in download_from_youtube: {e}")
+            traceback.print_exc()
             return YouTubeDownloadResponse(
                 success=False,
                 message=f'Download failed: {str(e)}'

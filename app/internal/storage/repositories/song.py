@@ -74,3 +74,24 @@ class SongRepository(BaseRepository[Song]):
                 return match.group(1)
         
         return None
+    
+    def update_song_cloudinary_urls(self, song_id: str, update_data: dict) -> Optional[Song]:
+        """Update song with Cloudinary URLs"""
+        try:
+            song = self.get_by_id(song_id)
+            if not song:
+                return None
+            
+            # Update with new Cloudinary URLs
+            for field, value in update_data.items():
+                if hasattr(song, field):
+                    setattr(song, field, value)
+            
+            self.db.commit()
+            self.db.refresh(song)
+            return song
+            
+        except Exception as e:
+            print(f"Error updating song cloudinary URLs: {e}")
+            self.db.rollback()
+            return None
