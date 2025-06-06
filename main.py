@@ -9,8 +9,8 @@ from app.config.config import settings
 from app.config.database import Base, engine
 
 # Import models to ensure they are registered with SQLAlchemy
-from app.internal.domain.user import User
-from app.internal.domain.song import Song
+from app.internal.model.user import User
+from app.internal.model.song import Song
 
 # Create database tables
 Base.metadata.create_all(bind=engine)

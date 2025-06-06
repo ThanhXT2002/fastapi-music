@@ -2,7 +2,7 @@ from sqlalchemy import Boolean, Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.config.database import Base
-from app.internal.domain.user_songs import user_songs
+from app.internal.model.user_songs import user_songs
 
 class User(Base):
     __tablename__ = "users"

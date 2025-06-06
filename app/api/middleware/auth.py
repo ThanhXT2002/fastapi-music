@@ -5,9 +5,9 @@ from typing import Optional
 
 from app.config.database import get_db
 from app.internal.rfc.jwt.jwt import decode_token
-from app.internal.domain.errors import TokenError, GoogleAuthError
+from app.internal.model.errors import TokenError, GoogleAuthError
 from app.internal.storage.repositories.user import UserRepository
-from app.internal.domain.user import User
+from app.internal.model.user import User
 from app.internal.utils.helpers import verify_firebase_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)

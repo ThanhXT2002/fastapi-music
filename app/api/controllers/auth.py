@@ -5,7 +5,7 @@ from datetime import timedelta
 from app.config.database import get_db
 from app.config.config import settings
 from app.internal.utils.helpers import verify_firebase_token
-from app.internal.domain.errors import GoogleAuthError, UserNotFoundError
+from app.internal.model.errors import GoogleAuthError, UserNotFoundError
 from app.internal.storage.repositories.user import UserRepository
 from app.internal.rfc.jwt.jwt import create_access_token
 from app.api.validators.auth import AuthResponse, TokenResponse, UserResponse

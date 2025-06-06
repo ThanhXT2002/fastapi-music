@@ -1,7 +1,7 @@
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from app.config.config import settings
-from app.internal.domain.errors import GoogleAuthError
+from app.internal.model.errors import GoogleAuthError
 from typing import Dict, Any
 import json
 import jwt

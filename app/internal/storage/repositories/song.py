@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import json
 import uuid
-from app.internal.domain.song import Song
+from app.internal.model.song import Song
 from app.internal.storage.repositories.repository import BaseRepository
 
 class SongRepository(BaseRepository[Song]):
@@ -22,7 +22,7 @@ class SongRepository(BaseRepository[Song]):
         
         # If user_id is provided, create the relationship
         if user_id:
-            from app.internal.domain.user import User
+            from app.internal.model.user import User
             user = self.db.query(User).filter(User.id == user_id).first()
             if user:
                 song.users.append(user)
