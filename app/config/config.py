@@ -30,5 +30,10 @@ class Settings(BaseSettings):
     UPLOAD_DIRECTORY: str = os.getenv("UPLOAD_DIRECTORY", "./uploads")
     AUDIO_DIRECTORY: str = os.getenv("AUDIO_DIRECTORY", "./uploads/audio")
     THUMBNAIL_DIRECTORY: str = os.getenv("THUMBNAIL_DIRECTORY", "./uploads/thumbnails")
+    
+    # Cloudinary configuration
+    CLOUDINARY_CLOUD_NAME: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+    CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "")
+    CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "")
 
 settings = Settings()

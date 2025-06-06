@@ -14,11 +14,10 @@ class Song(Base):
     duration = Column(Integer, nullable=False)  # in seconds
     genre = Column(Text, nullable=True)  # JSON string of genres array
     release_date = Column(String(50), nullable=True)
-    
-    # Media files
-    thumbnail_url = Column(String(500), nullable=True)
-    audio_url = Column(String(500), nullable=True)
-    local_path = Column(String(500), nullable=True)
+      # Media files
+    thumbnail_url = Column(String(500), nullable=True)  # Can store local or Cloudinary URLs
+    audio_url = Column(String(500), nullable=True)      # Can store local or Cloudinary URLs
+    local_path = Column(String(500), nullable=True)     # Original local file path for reference
     
     # Lyrics
     lyrics = Column(Text, nullable=True)

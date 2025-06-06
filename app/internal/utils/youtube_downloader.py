@@ -167,8 +167,7 @@ class YouTubeDownloader:
                 additional_info = {}
                 if info_file.exists():
                     with open(info_file, 'r', encoding='utf-8') as f:
-                        additional_info = json.load(f)
-                  # Find thumbnail file and move it to correct directory
+                        additional_info = json.load(f)                # Find thumbnail file and move it to correct directory
                 thumbnail_file = None
                 for ext in ['jpg', 'jpeg', 'png', 'webp']:
                     potential_thumb = self.audio_dir / f"{filename}.{ext}"
@@ -180,14 +179,14 @@ class YouTubeDownloader:
                         break
                 
                 # Prepare song data
-                song_data = self._extract_song_data(info, str(audio_file), str(thumbnail_file) if thumbnail_file else None)
+                song_data, thumbnail_path = self._extract_song_data(info, str(audio_file), str(thumbnail_file) if thumbnail_file else None)
                 
-                return True, str(audio_file), song_data
+                return True, str(audio_file), song_data, thumbnail_path
                 
         except Exception as e:
-            return False, f"Download failed: {str(e)}", None
+            return False, f"Download failed: {str(e)}", None, None
     
-    def _extract_song_data(self, info: Dict, audio_path: str, thumbnail_path: Optional[str] = None) -> Dict:
+    def _extract_song_data(self, info: Dict, audio_path: str, thumbnail_path: Optional[str] = None) -> Tuple[Dict, Optional[str]]:
         """Extract song data from YouTube info"""
         # Extract duration in seconds
         duration = info.get('duration', 0)
@@ -216,12 +215,12 @@ class YouTubeDownloader:
                 date_obj = datetime.strptime(upload_date, '%Y%m%d')
                 release_date = date_obj.strftime('%Y-%m-%d')
             except:
-                release_date = upload_date
-        
-        # Extract tags/keywords
+                release_date = upload_date        # Extract tags/keywords
         tags = info.get('tags', [])
         categories = info.get('categories', [])
-        keywords = tags + categories        # Create HTTP URLs for serving files
+        keywords = tags + categories
+        
+        # Create HTTP URLs for serving files
         import os
         audio_filename = os.path.basename(audio_path) if audio_path else None
         thumbnail_filename = os.path.basename(thumbnail_path) if thumbnail_path else None
@@ -246,7 +245,7 @@ class YouTubeDownloader:
             'has_lyrics': False,  # Could be enhanced to extract lyrics
         }
         
-        return song_data
+        return song_data, thumbnail_path  # Return thumbnail_path separately
     
     def get_playlist_info(self, url: str) -> Optional[Dict]:
         """Get playlist information"""
@@ -262,9 +261,8 @@ class YouTubeDownloader:
                 return info
         except Exception as e:
             print(f"Error extracting playlist info: {e}")
-            return None
-    
-    def download_playlist(self, url: str, max_downloads: int = 10) -> List[Tuple[bool, str, Optional[Dict]]]:
+            return None    
+    def download_playlist(self, url: str, max_downloads: int = 10) -> List[Tuple[bool, str, Optional[Dict], Optional[str]]]:
         """Download multiple videos from playlist"""
         playlist_info = self.get_playlist_info(url)
         if not playlist_info or 'entries' not in playlist_info:

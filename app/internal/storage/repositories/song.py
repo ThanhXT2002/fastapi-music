@@ -8,12 +8,12 @@ from app.internal.storage.repositories.repository import BaseRepository
 class SongRepository(BaseRepository[Song]):
     def __init__(self, db: Session):
         super().__init__(Song, db)
-    
     def create_song(self, song_data: dict, user_id: Optional[int] = None) -> Song:
         """Create a new song"""
         song_data['id'] = str(uuid.uuid4())
         song_data['user_id'] = user_id
-          # Convert list fields to JSON strings
+        
+        # Convert list fields to JSON strings
         if 'artists' in song_data and song_data['artists']:
             song_data['artists'] = json.dumps(song_data['artists'])
         if 'genre' in song_data and song_data['genre']:
@@ -24,16 +24,39 @@ class SongRepository(BaseRepository[Song]):
         return super().create(song_data)
     
     def find_by_youtube_url(self, url: str) -> Optional[Song]:
-        """Find song by YouTube video ID extracted from URL"""
+        """Find song by YouTube video ID extracted from URL with retry logic"""
         video_id = self._extract_youtube_id(url)
         if not video_id:
             return None
         
-        # Tìm bài hát có source_url chứa video_id
-        from sqlalchemy import or_
-        return self.db.query(Song).filter(
-            Song.source_url.like(f"%{video_id}%")
-        ).first()
+        # Retry logic for database queries
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Tìm bài hát có source_url chứa video_id
+                from sqlalchemy import or_
+                result = self.db.query(Song).filter(
+                    Song.source_url.like(f"%{video_id}%")
+                ).first()
+                return result
+            except Exception as e:
+                print(f"Database query attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    # Reconnect database session
+                    try:
+                        self.db.rollback()
+                        self.db.close()
+                        # Get a new session
+                        from app.config.database import SessionLocal
+                        self.db = SessionLocal()
+                    except:
+                        pass
+                    import time
+                    time.sleep(1)  # Wait 1 second before retry
+                    continue
+                else:
+                    print(f"Failed to query database after {max_retries} attempts")
+                    return None
 
     def _extract_youtube_id(self, url: str) -> Optional[str]:
         """Extract YouTube video ID from URL"""
