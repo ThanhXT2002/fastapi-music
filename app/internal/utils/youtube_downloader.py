@@ -5,6 +5,10 @@ import uuid
 from typing import Dict, Optional, Tuple, List
 from pathlib import Path
 from app.config.config import settings
+import os
+import shutil
+import subprocess
+from pathlib import Path
 
 class YouTubeDownloader:
     def __init__(self):
@@ -43,57 +47,55 @@ class YouTubeDownloader:
                     "success": False,
                     "message": "Failed to extract video information"
                 }
-            
-            # Get title and uploader (artist)
+              # Get title and uploader (artist)
             title = info.get('title', 'Unknown Title')
             uploader = info.get('uploader', 'Unknown Artist')
-            
-            # Try to parse artist and title from video title (if it follows "Artist - Title" format)
+              # Use uploader (channel name) as artist, keep original title unchanged
             artist = uploader
-            original_title = title
-            if ' - ' in title:
-                parts = title.split(' - ', 1)
-                artist = parts[0].strip()
-                title = parts[1].strip()
-            
-            # Get best thumbnail
+            # Don't modify title - keep it as is from YouTube
+              # Get best thumbnail
             thumbnails = info.get('thumbnails', [])
             best_thumbnail = None
             if thumbnails:
                 # Sort by resolution and pick the highest quality
                 sorted_thumbnails = sorted(thumbnails, 
-                                          key=lambda x: (x.get('width', 0) * x.get('height', 0)), 
+                                          key=lambda x: ((x.get('width') or 0) * (x.get('height') or 0)), 
                                           reverse=True)
                 best_thumbnail = sorted_thumbnails[0].get('url') if sorted_thumbnails else None
             
             # Get direct audio stream URL
             formats = info.get('formats', [])
             audio_formats = [f for f in formats if f.get('vcodec') == 'none' and f.get('acodec') != 'none']
-            
             best_audio_url = None
             if audio_formats:
                 # Sort by quality and pick the best
                 sorted_formats = sorted(audio_formats,
-                                       key=lambda x: x.get('abr', 0),
+                                       key=lambda x: x.get('abr') or 0,
                                        reverse=True)
                 best_audio_url = sorted_formats[0].get('url') if sorted_formats else None
             
             # If no audio-only format found, use the original URL
             if not best_audio_url:
                 best_audio_url = url
-            
-            # Get duration
+              # Get duration
             duration = info.get('duration', 0)
+            
+            # Extract keywords from tags and categories
+            tags = info.get('tags', [])
+            categories = info.get('categories', [])
+            keywords = tags + categories
+            # Limit to first 10 keywords and filter out empty ones
+            keywords = [k for k in keywords if k and k.strip()][:10]
             
             result = {
                 "success": True,
                 "title": title,
-                "original_title": original_title,
                 "artist": artist,
                 "thumbnail_url": best_thumbnail,
                 "audio_url": best_audio_url,
                 "duration": duration,
-                "duration_formatted": self._format_duration(duration)
+                "duration_formatted": self._format_duration(duration),
+                "keywords": keywords
             }
             
             return result
@@ -279,10 +281,6 @@ class YouTubeDownloader:
     
     def _get_ffmpeg_location(self) -> Optional[str]:
         """Find FFmpeg location, always prioritize project ffmpeg/bin first"""
-        import os
-        import shutil
-        import subprocess
-        from pathlib import Path
 
         # Always prioritize ffmpeg in project root first
         project_root = Path(__file__).resolve().parent.parent.parent.parent

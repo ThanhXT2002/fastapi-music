@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from app.api.controllers.song import SongController
 from app.api.middleware.auth import get_current_user_optional
 from app.api.validators.song import (
-    YouTubeDownloadRequest, YouTubeDownloadResponse
+    YouTubeDownloadRequest, YouTubeDownloadResponse, VideoInfoResponse
 )
 
 router = APIRouter()
@@ -21,3 +21,15 @@ async def download_from_youtube(
         quality='best'        # Mặc định luôn dùng chất lượng tốt nhất
     )
     return controller.download_from_youtube(request, current_user)
+
+@router.get("/info", response_model=VideoInfoResponse)
+async def getInfoVideo(
+    url: str,
+    controller: SongController = Depends()
+):
+    """Get video information from YouTube URL without downloading
+    
+    Returns basic information about a YouTube video including title, artist, 
+    thumbnail URL, and duration, without actually downloading the video.
+    """
+    return controller.get_video_info(url)

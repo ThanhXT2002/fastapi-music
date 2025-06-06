@@ -16,7 +16,7 @@ from app.internal.utils.youtube_downloader import YouTubeDownloader
 from app.internal.utils.cloudinary_service import CloudinaryService
 from app.api.validators.song import (
     SongResponse, 
-    YouTubeDownloadRequest, YouTubeDownloadResponse
+    YouTubeDownloadRequest, YouTubeDownloadResponse, VideoInfoResponse
 )
 from app.api.middleware.auth import get_current_user_optional
 
@@ -169,6 +169,32 @@ class SongController:
             import traceback
             traceback.print_exc()
     
+    def get_video_info(self, url: str):
+        """Get video information without downloading
+        
+        Returns:
+            VideoInfoResponse object containing video details
+        """
+        try:
+            if not self._is_valid_youtube_url(url):
+                return VideoInfoResponse(
+                    success=False,
+                    message='Invalid YouTube URL format'
+                )
+                
+            # Use the YouTubeDownloader's get_video_details method
+            video_details = self.youtube_downloader.get_video_details(url)
+            
+            # Return a VideoInfoResponse object
+            return video_details
+                
+        except Exception as e:
+            print(f"Error in get_video_info: {e}")
+            return VideoInfoResponse(
+                success=False,
+                message=f"Error getting video info: {str(e)}"
+            )
+            
     def download_from_youtube(self, request: YouTubeDownloadRequest, current_user = None) -> YouTubeDownloadResponse:
         """Download song from YouTube with new workflow"""
         try:

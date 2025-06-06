@@ -71,3 +71,14 @@ class YouTubeDownloadResponse(BaseModel):
     message: str
     song: Optional[SongResponse] = None
     download_path: Optional[str] = None
+
+class VideoInfoResponse(BaseModel):
+    success: bool
+    message: Optional[str] = None
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    audio_url: Optional[str] = None
+    duration: Optional[int] = None
+    duration_formatted: Optional[str] = None
+    keywords: Optional[List[str]] = None
