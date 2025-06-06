@@ -74,24 +74,34 @@ class SongRepository(BaseRepository[Song]):
                 return match.group(1)
         
         return None
-    
     def update_song_cloudinary_urls(self, song_id: str, update_data: dict) -> Optional[Song]:
         """Update song with Cloudinary URLs"""
         try:
-            song = self.get_by_id(song_id)
+            song = self.find_by_id(song_id)
             if not song:
+                print(f"❌ Song not found with ID: {song_id}")
                 return None
+            
+            print(f"🔍 Found song: {song.title} (ID: {song_id})")
+            print(f"🔄 Updating fields: {list(update_data.keys())}")
             
             # Update with new Cloudinary URLs
             for field, value in update_data.items():
                 if hasattr(song, field):
+                    old_value = getattr(song, field, None)
                     setattr(song, field, value)
+                    print(f"✅ Updated {field}: {old_value} -> {value}")
+                else:
+                    print(f"⚠️ Field {field} not found in Song model")
             
             self.db.commit()
             self.db.refresh(song)
+            print(f"✅ Database updated successfully for song: {song_id}")
             return song
             
         except Exception as e:
-            print(f"Error updating song cloudinary URLs: {e}")
+            print(f"❌ Error updating song cloudinary URLs: {e}")
+            import traceback
+            traceback.print_exc()
             self.db.rollback()
             return None

@@ -98,14 +98,16 @@ class SongController:
             r'(?:https?://)(?:www\.)?youtube\.com/watch\?v=[\w\-]{11}',
             r'(?:https?://)(?:www\.)?youtu\.be/[\w\-]{11}',
             r'(?:https?://)(?:www\.)?youtube\.com/embed/[\w\-]{11}',
-            r'(?:https?://)(?:www\.)?youtube\.com/v/[\w\-]{11}',
-        ]
+            r'(?:https?://)(?:www\.)?youtube\.com/v/[\w\-]{11}',        ]
         return any(re.match(pattern, url) for pattern in youtube_patterns)
     
     def _background_upload_to_cloudinary(self, song_id: str, audio_path: str, thumbnail_path: str, title: str):
         """Background task to upload files to Cloudinary and update database"""
         try:
             print(f"🚀 [Background] Starting Cloudinary upload for: {title}")
+            print(f"🔍 [Background] Song ID: {song_id}")
+            print(f"🔍 [Background] Audio path: {audio_path}")
+            print(f"🔍 [Background] Thumbnail path: {thumbnail_path}")
             
             # Upload to Cloudinary
             cloudinary_result = self.cloudinary_service.upload_media_files(
@@ -113,6 +115,8 @@ class SongController:
                 thumbnail_path=thumbnail_path,
                 base_filename=title
             )
+            
+            print(f"🔍 [Background] Cloudinary result: {cloudinary_result}")
             
             if cloudinary_result.get('success'):
                 # Prepare update data
@@ -128,13 +132,17 @@ class SongController:
                 
                 # Update database with Cloudinary URLs
                 if update_data:
+                    print(f"🔄 [Background] Preparing to update database with: {update_data}")
                     # Create new database session for background task
                     from app.config.database import SessionLocal
                     db = SessionLocal()
                     try:
                         song_repo = SongRepository(db)
-                        song_repo.update_song_cloudinary_urls(song_id, update_data)
-                        print(f"✅ [Background] Database updated for song: {song_id}")
+                        updated_song = song_repo.update_song_cloudinary_urls(song_id, update_data)
+                        if updated_song:
+                            print(f"✅ [Background] Database updated successfully for song: {song_id}")
+                        else:
+                            print(f"❌ [Background] Failed to update database for song: {song_id}")
                         
                         # Clean up local files after successful upload
                         files_to_cleanup = []
@@ -149,6 +157,8 @@ class SongController:
                         
                     finally:
                         db.close()
+                else:
+                    print(f"❌ [Background] No data to update for song: {song_id}")
                         
                 print(f"✅ [Background] Cloudinary upload completed for: {title}")
             else:
@@ -156,6 +166,7 @@ class SongController:
                 
         except Exception as e:
             print(f"❌ [Background] Error in Cloudinary upload: {e}")
+            import traceback
             traceback.print_exc()
     
     def download_from_youtube(self, request: YouTubeDownloadRequest, current_user = None) -> YouTubeDownloadResponse:
