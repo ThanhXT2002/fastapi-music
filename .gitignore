@@ -16,3 +16,4 @@ API_TEST_RESULTS.md
 test_api_corrected.py
 uploads/
 ffmpeg/
+test_db_connection.py
