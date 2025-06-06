@@ -2,6 +2,9 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 import uuid
+import re  
+import json
+from app.config.config import settings
 
 from app.config.database import get_db
 from app.internal.storage.repositories.song import SongRepository
@@ -20,9 +23,6 @@ class SongController:
     
     def _convert_to_response(self, song) -> SongResponse:
         """Helper method to convert Song model to SongResponse"""
-        import json
-        from app.config.config import settings
-        
         try:
             # Parse JSON fields if they exist
             artists = song.artists
@@ -100,12 +100,82 @@ class SongController:
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )    
+            
+    def _is_valid_youtube_url(self, url: str) -> bool:
+        """Validate YouTube URL format"""
+        # Các pattern phổ biến cho YouTube URLs
+        youtube_patterns = [
+            r'(?:https?://)(?:www\.)?youtube\.com/watch\?v=[\w\-]{11}',  # youtube.com/watch?v=ID
+            r'(?:https?://)(?:www\.)?youtu\.be/[\w\-]{11}',             # youtu.be/ID
+            r'(?:https?://)(?:www\.)?youtube\.com/embed/[\w\-]{11}',    # youtube.com/embed/ID
+            r'(?:https?://)(?:www\.)?youtube\.com/v/[\w\-]{11}',        # youtube.com/v/ID
+        ]
+        
+        return any(re.match(pattern, url) for pattern in youtube_patterns)
     
     def download_from_youtube(self, request: YouTubeDownloadRequest, current_user = None) -> YouTubeDownloadResponse:
         """Download song from YouTube"""
         from app.config.config import settings
         
         try:
+            # 1. VALIDATION URL FORMAT TRƯỚC TIÊN
+            if not self._is_valid_youtube_url(request.url):
+                return YouTubeDownloadResponse(
+                    success=False,
+                    message='Invalid YouTube URL format'
+                )
+                
+            # 2. EXTRACT INFO ĐỂ VALIDATE (không download)
+            try:
+                info = self.youtube_downloader.extract_info(request.url)
+                if not info:
+                    return YouTubeDownloadResponse(
+                        success=False,
+                        message='Video not found or unavailable'
+                    )
+            except Exception as e:
+                error_msg = str(e)
+                if "Video unavailable" in error_msg or "Private video" in error_msg:
+                    return YouTubeDownloadResponse(
+                        success=False,
+                        message='Video is private, unavailable or restricted'
+                    )
+                elif "network" in error_msg.lower():
+                    return YouTubeDownloadResponse(
+                        success=False,
+                        message='Network connection error. Please try again.'
+                    )
+                else:
+                    return YouTubeDownloadResponse(
+                        success=False,
+                        message=f'Cannot access video: {error_msg}'
+                    )
+                    
+            # 3. KIỂM TRA DURATION (MAX 2 TIẾNG = 7200 SECONDS)
+            duration = info.get('duration', 0)
+            if duration and duration > 7200:  # 2 hours
+                minutes = duration // 60
+                hours = minutes // 60
+                mins = minutes % 60
+                return YouTubeDownloadResponse(
+                    success=False,
+                    message=f'Video too long ({hours}h {mins}m). Maximum 2 hours allowed.'
+                )
+            
+            # 4. KIỂM TRA LOẠI CONTENT (tránh livestream, shorts quá ngắn)
+            if info.get('is_live'):
+                return YouTubeDownloadResponse(
+                    success=False,
+                    message='Cannot download live streams'
+                )
+            
+            if duration and duration < 10:  # Tránh video quá ngắn (< 10 giây)
+                return YouTubeDownloadResponse(
+                    success=False,
+                    message='Video too short (minimum 10 seconds required)'
+                )
+                
+            
             # Helper function to convert relative URLs to absolute URLs
             def make_absolute_url(url):
                 if not url:
