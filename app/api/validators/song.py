@@ -78,6 +78,7 @@ class VideoInfoResponse(BaseModel):
     data: Optional[dict] = None
 
 class VideoInfoData(BaseModel):
+    id: str
     title: Optional[str] = None
     artist: Optional[str] = None
     thumbnail_url: Optional[str] = None

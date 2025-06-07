@@ -81,6 +81,8 @@ class YouTubeDownloader:
                     "message": "Failed to extract video information - Video might be private, restricted, or unavailable"
                 }
                 
+            video_id = info.get('id', 'Unknown ID')
+            
             # Get title and uploader (artist)
             title = info.get('title', 'Unknown Title')
             uploader = info.get('uploader', 'Unknown Artist')
@@ -132,6 +134,7 @@ class YouTubeDownloader:
             keywords = [k for k in keywords if k and k.strip()][:10]
             
             result = {
+                "id": video_id,
                 "title": title,
                 "artist": artist,
                 "thumbnail_url": best_thumbnail,
