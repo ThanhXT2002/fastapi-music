@@ -13,7 +13,11 @@ from app.internal.model.user import User
 from app.internal.model.song import Song
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("Database connected successfully")
+except Exception as e:
+    print(f"Database connection failed: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
