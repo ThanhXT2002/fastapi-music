@@ -267,7 +267,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "sqlalchemy", specifier = ">=2.0.41" },
     { name = "uvicorn", specifier = ">=0.34.2" },
-    { name = "yt-dlp", specifier = ">=2025.5.22" },
+    { name = "yt-dlp", specifier = ">=2024.12.13" },
 ]
 
 [[package]]

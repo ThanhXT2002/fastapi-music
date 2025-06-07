@@ -17,5 +17,5 @@ dependencies = [
     "python-multipart>=0.0.20",
     "sqlalchemy>=2.0.41",
     "uvicorn>=0.34.2",
-    "yt-dlp>=2025.5.22",
+    "yt-dlp>=2024.12.13",
 ]
