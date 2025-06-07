@@ -28,20 +28,26 @@ class SongController:
             if not self._is_valid_youtube_url(url):
                 return VideoInfoResponse(
                     success=False,
-                    message='Invalid YouTube URL format'
+                    message='Invalid YouTube URL format',
+                    data=None
                 )
                 
             # Use the YouTubeDownloader's get_video_details method
             video_details = self.youtube_downloader.get_video_details(url)
             
-            # Return a VideoInfoResponse object
-            return video_details
+            # Assuming video_details returns a dict with video information
+            return VideoInfoResponse(
+                success=True,
+                message="Video information retrieved successfully",
+                data=video_details
+            )
                 
         except Exception as e:
             print(f"Error in get_video_info: {e}")
             return VideoInfoResponse(
                 success=False,
-                message=f"Error getting video info: {str(e)}"
+                message=f"Error getting video info: {str(e)}",
+                data=None
             )
             
    

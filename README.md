@@ -12,6 +12,10 @@ uv install
 python main.py
 ```
 
+# vào môi trường venv:
+.venv\Scripts\activate
+
+
 Server chạy tại: http://localhost:8000
 
 ## 🔥 Tính năng

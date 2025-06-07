@@ -132,7 +132,6 @@ class YouTubeDownloader:
             keywords = [k for k in keywords if k and k.strip()][:10]
             
             result = {
-                "success": True,
                 "title": title,
                 "artist": artist,
                 "thumbnail_url": best_thumbnail,

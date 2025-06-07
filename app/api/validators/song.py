@@ -74,7 +74,10 @@ class YouTubeDownloadResponse(BaseModel):
 
 class VideoInfoResponse(BaseModel):
     success: bool
-    message: Optional[str] = None
+    message: str
+    data: Optional[dict] = None
+
+class VideoInfoData(BaseModel):
     title: Optional[str] = None
     artist: Optional[str] = None
     thumbnail_url: Optional[str] = None
