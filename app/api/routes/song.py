@@ -7,7 +7,7 @@ from app.api.validators.song import (
 
 router = APIRouter()
 
-@router.get("/info", response_model=VideoInfoResponse)
+@router.post("/info", response_model=VideoInfoResponse)
 async def getInfoVideo(
     url: str,
     controller: SongController = Depends()
