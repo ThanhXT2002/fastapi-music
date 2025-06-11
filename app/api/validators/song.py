@@ -82,6 +82,7 @@ class VideoInfoData(BaseModel):
     title: Optional[str] = None
     artist: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    channel_avatar_url: Optional[str] = None
     audio_url: Optional[str] = None
     duration: Optional[int] = None
     duration_formatted: Optional[str] = None

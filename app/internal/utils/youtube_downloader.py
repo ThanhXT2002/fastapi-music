@@ -63,7 +63,7 @@ class YouTubeDownloader:
         """Get only necessary video details for frontend without downloading
         
         Returns:
-            Dict with: title, artist, thumbnail_url, audio_url, duration
+            Dict with: title, artist, thumbnail_url, audio_url, duration, channel_avatar_url
         """
         try:
             # Validate URL trước khi process
@@ -99,6 +99,9 @@ class YouTubeDownloader:
                                           key=lambda x: ((x.get('width') or 0) * (x.get('height') or 0)), 
                                           reverse=True)
                 best_thumbnail = sorted_thumbnails[0].get('url') if sorted_thumbnails else None
+            
+            # Get channel avatar/profile picture
+            channel_avatar_url = self._get_channel_avatar(info)
             
             # Get direct audio stream URL với error handling tốt hơn
             formats = info.get('formats', [])
@@ -138,6 +141,7 @@ class YouTubeDownloader:
                 "title": title,
                 "artist": artist,
                 "thumbnail_url": best_thumbnail,
+                "channel_avatar_url": channel_avatar_url,  # Thêm ảnh kênh
                 "audio_url": best_audio_url,
                 "duration": duration,
                 "duration_formatted": self._format_duration(duration),
@@ -172,3 +176,49 @@ class YouTubeDownloader:
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         else:
             return f"{minutes:02d}:{seconds:02d}"
+    
+    def _get_channel_avatar(self, info: Dict) -> Optional[str]:
+        """Try multiple methods to get channel avatar URL"""
+        
+        # Method 1: uploader_thumbnails (most reliable)
+        uploader_thumbnails = info.get('uploader_thumbnails', [])
+        if uploader_thumbnails and isinstance(uploader_thumbnails, list):
+            sorted_thumbnails = sorted(uploader_thumbnails,
+                                     key=lambda x: ((x.get('width') or 0) * (x.get('height') or 0)),
+                                     reverse=True)
+            if sorted_thumbnails:
+                return sorted_thumbnails[0].get('url')
+        
+        # Method 2: channel_thumbnails
+        channel_thumbnails = info.get('channel_thumbnails', [])
+        if channel_thumbnails and isinstance(channel_thumbnails, list):
+            sorted_thumbnails = sorted(channel_thumbnails,
+                                     key=lambda x: ((x.get('width') or 0) * (x.get('height') or 0)),
+                                     reverse=True)
+            if sorted_thumbnails:
+                return sorted_thumbnails[0].get('url')
+        
+        # Method 3: Construct from channel_id
+        channel_id = info.get('channel_id')
+        if channel_id:
+            return f"https://yt3.ggpht.com/ytc/channel/{channel_id}"
+        
+        # Method 4: Construct from uploader_id
+        uploader_id = info.get('uploader_id')
+        if uploader_id:
+            return f"https://yt3.ggpht.com/ytc/channel/{uploader_id}"
+        
+        # Method 5: Parse from channel_url
+        channel_url = info.get('channel_url') or info.get('uploader_url')
+        if channel_url and '/channel/' in channel_url:
+            try:
+                channel_id = channel_url.split('/channel/')[-1].split('/')[0]  # Remove any trailing paths
+                return f"https://yt3.ggpht.com/ytc/channel/{channel_id}"
+            except:
+                pass
+        
+        # Method 6: Alternative YouTube avatar API
+        if channel_id:
+            return f"https://yt3.googleusercontent.com/ytc/channel/{channel_id}"
+        
+        return None
