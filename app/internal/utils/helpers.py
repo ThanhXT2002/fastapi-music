@@ -3,9 +3,7 @@ from google.auth.transport import requests
 from app.config.config import settings
 from app.internal.model.errors import GoogleAuthError
 from typing import Dict, Any
-import json
 import jwt
-import os
 
 def verify_firebase_token(token: str) -> Dict[str, Any]:
     """
@@ -95,31 +93,7 @@ def verify_firebase_token_alternative(token: str) -> Dict[str, Any]:
                 'firebase_uid': unverified_payload.get('sub'),
                 'email_verified': unverified_payload.get('email_verified', False)
             }
-        
-        raise ValueError(f"Invalid token issuer: {unverified_payload.get('iss')} or audience: {unverified_payload.get('aud')}")
+        raise ValueError(f"Invalid token issuer: {unverified_payload.get('iss')} or audience:   {unverified_payload.get('aud')}")
         
     except Exception as e:
         raise GoogleAuthError(f"Alternative verification failed: {str(e)}")
-
-def verify_google_token(token: str) -> Dict[str, Any]:
-    """
-    Verify Google OAuth ID token and return user info
-    (Legacy function for direct Google OAuth)
-    """
-    try:
-        idinfo = id_token.verify_oauth2_token(
-            token, requests.Request(), settings.GOOGLE_CLIENT_ID
-        )
-        
-        # Check if the token is issued by Google
-        if idinfo['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-            raise ValueError('Wrong issuer.')
-            
-        return {
-            'email': idinfo['email'],
-            'name': idinfo.get('name'),
-            'profile_picture': idinfo.get('picture'),
-            'google_id': idinfo['sub']
-        }
-    except Exception as e:
-        raise GoogleAuthError(f"Invalid Google token: {str(e)}")

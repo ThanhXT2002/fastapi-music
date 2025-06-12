@@ -2,18 +2,13 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 from jose import jwt, JWTError
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from app.config.config import settings
 from app.internal.model.errors import TokenError
 
 class TokenPayload(BaseModel):
     sub: str
     exp: int
-    
-class UserData(BaseModel):
-    email: EmailStr
-    name: Optional[str] = None
-    profile_picture: Optional[str] = None
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """

@@ -1,4 +1,3 @@
-import re  
 from app.internal.utils.youtube_service import YouTubeService
 from fastapi import Request
 from sqlalchemy.orm import Session
