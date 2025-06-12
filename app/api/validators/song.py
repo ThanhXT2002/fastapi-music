@@ -42,47 +42,4 @@ class SongResponse(SongBase):
     class Config:
         from_attributes = True
 
-class YouTubeDownloadRequest(BaseModel):
-    url: str = Field(..., min_length=1)
-    download_audio: bool = Field(default=True)
-    quality: str = Field(default='best')
-    
-    @field_validator('quality')
-    @classmethod
-    def validate_quality(cls, v):
-        if v not in ['best', 'worst', 'bestaudio', 'worstaudio']:
-            raise ValueError('Quality must be one of: best, worst, bestaudio, worstaudio')
-        return v
 
-class SimpleDownloadRequest(BaseModel):
-    url: str = Field(..., min_length=1, description="YouTube URL to download")
-    
-    @field_validator('url')
-    @classmethod
-    def validate_youtube_url(cls, v):
-        import re
-        youtube_regex = r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/'
-        if not re.search(youtube_regex, v):
-            raise ValueError('Invalid YouTube URL')
-        return v
-
-class YouTubeDownloadResponse(BaseModel):
-    success: bool
-    message: str
-    song: Optional[SongResponse] = None
-    download_path: Optional[str] = None
-
-class VideoInfoResponse(BaseModel):
-    success: bool
-    message: str
-    data: Optional[dict] = None
-
-class VideoInfoData(BaseModel):
-    id: str
-    title: Optional[str] = None
-    artist: Optional[str] = None
-    thumbnail_url: Optional[str] = None
-    audio_url: Optional[str] = None
-    duration: Optional[int] = None
-    duration_formatted: Optional[str] = None
-    keywords: Optional[List[str]] = None
