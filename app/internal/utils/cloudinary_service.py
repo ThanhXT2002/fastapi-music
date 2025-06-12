@@ -36,7 +36,7 @@ class CloudinaryService:
                 'use_filename': False,
                 'unique_filename': True,
                 'overwrite': False,
-                'format': 'mp3',
+                'format': 'm4a',
                 'quality': 'auto',
                 'tags': ['music', 'audio', 'youtube_download']
             }
