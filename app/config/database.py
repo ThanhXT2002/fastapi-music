@@ -5,18 +5,28 @@ from app.config.config import settings
 import time
 from typing import Optional
 
-# Enhanced engine configuration for PostgreSQL with connection pooling
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=10,                    # Number of connections to maintain
-    max_overflow=20,                 # Additional connections beyond pool_size
-    pool_timeout=30,                 # Seconds to wait for connection
-    pool_recycle=3600,              # Recycle connections every hour
-    pool_pre_ping=True,             # Test connections before use
-    connect_args={
-        "options": "-c timezone=utc"  # Set timezone for PostgreSQL
-    }
-)
+# Enhanced engine configuration for both SQLite and PostgreSQL
+if settings.DATABASE_URL.startswith("sqlite"):
+    # SQLite specific configuration
+    engine = create_engine(
+        settings.DATABASE_URL,
+        connect_args={"check_same_thread": False},  # SQLite specific
+        echo=False,  # Set to True for debugging
+        pool_pre_ping=True
+    )
+else:
+    # PostgreSQL configuration
+    engine = create_engine(
+        settings.DATABASE_URL,
+        pool_size=10,                    # Number of connections to maintain
+        max_overflow=20,                 # Additional connections beyond pool_size
+        pool_timeout=30,                 # Seconds to wait for connection
+        pool_recycle=3600,              # Recycle connections every hour
+        pool_pre_ping=True,             # Test connections before use
+        connect_args={
+            "options": "-c timezone=utc"  # Set timezone for PostgreSQL
+        }
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -73,3 +83,30 @@ def get_db():
         raise
     finally:
         db.close()
+
+def create_tables():
+    """Create all database tables"""
+    Base.metadata.create_all(bind=engine)
+    print(f"Database tables created successfully using {get_database_type()}")
+
+def get_database_type():
+    """Get database type"""
+    if settings.DATABASE_URL.startswith("sqlite"):
+        return "SQLite"
+    elif settings.DATABASE_URL.startswith("postgresql"):
+        return "PostgreSQL"
+    else:
+        return "Unknown"
+
+def get_database_info():
+    """Get database connection info"""
+    db_type = get_database_type()
+    info = {
+        "database_url": settings.DATABASE_URL,
+        "database_type": db_type,
+    }
+    
+    if db_type == "SQLite":
+        info["database_file"] = settings.DATABASE_URL.split("///")[-1]
+    
+    return info

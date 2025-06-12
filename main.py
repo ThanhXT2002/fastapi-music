@@ -5,7 +5,7 @@ import uvicorn
 from pathlib import Path
 from app.api.routes.router import api_router
 from app.config.config import settings
-from app.config.database import Base, engine
+from app.config.database import Base, engine, create_tables, get_database_info
 
 # Import models to ensure they are registered with SQLAlchemy
 from app.internal.model.user import User
@@ -14,8 +14,12 @@ from app.internal.model.youtube_cache import YouTubeCache
 
 # Create database tables
 try:
-    Base.metadata.create_all(bind=engine)
-    print("Database connected successfully")
+    create_tables()
+    db_info = get_database_info()
+    print(f"Database connected successfully")
+    print(f"Database type: {db_info['database_type']}")
+    if db_info.get('database_file'):
+        print(f"Database file: {db_info['database_file']}")
 except Exception as e:
     print(f"Database connection failed: {e}")
 

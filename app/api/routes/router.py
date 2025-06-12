@@ -1,14 +1,22 @@
 from fastapi import APIRouter
 from app.api.routes import auth
 from app.api.routes import song
-from app.config.database import Base, engine
+from app.config.database import Base, engine, get_database_info
 
 api_router = APIRouter()
 
 # Health check endpoint
 @api_router.get("/health")
 async def health_check():
-    return {"status": "ok", "message": "FastAPI Music API is running"}
+    db_info = get_database_info()
+    return {
+        "status": "ok", 
+        "message": "FastAPI Music API is running",
+        "database": {
+            "type": db_info["database_type"],
+            "status": "connected"
+        }
+    }
 
 @api_router.get("/init-db")
 def init_database():
