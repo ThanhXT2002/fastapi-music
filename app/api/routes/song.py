@@ -4,7 +4,6 @@ from app.config.database import get_db
 from app.api.controllers.song import SongController
 from app.api.middleware.auth import get_current_user_optional
 from app.api.validators.youtube import (
-    YouTubeDownloadRequest,
     YouTubeDownloadResponse,
     RecentDownloadsResponse
 )
@@ -13,11 +12,9 @@ from typing import Optional
 
 router = APIRouter()
 
-
-
 @router.post("/download", response_model=YouTubeDownloadResponse)
 async def download_youtube_audio(
-    request_data: YouTubeDownloadRequest,
+    url: str,
     request: Request,
     db: Session = Depends(get_db),
     controller: SongController = Depends(),
@@ -32,7 +29,7 @@ async def download_youtube_audio(
     """
     user_id = current_user.id if current_user else None
     return controller.download_youtube_audio(
-        url=request_data.url,
+        url=url,
         request=request,
         db=db,
         user_id=user_id
