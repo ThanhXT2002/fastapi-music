@@ -6,6 +6,8 @@ dist/
 wheels/
 *.egg-info
 
+# Database files
+fastapi_music.db
 
 # Virtual environments
 .venv
