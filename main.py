@@ -12,6 +12,9 @@ from app.internal.model.user import User
 from app.internal.model.song import Song
 from app.internal.model.youtube_cache import YouTubeCache
 
+# Import admin setup
+from app.config.admin import setup_admin
+
 # Create database tables
 try:
     create_tables()
@@ -38,6 +41,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Setup Admin Panel
+try:
+    admin = setup_admin(app)
+    print("Admin panel setup successfully at /admin")
+except Exception as e:
+    print(f"Admin panel setup failed: {e}")
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_PREFIX)
