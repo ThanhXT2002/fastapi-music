@@ -19,4 +19,8 @@ uploads/
 ffmpeg/
 test_db_connection.py
 
+# Database files
+*.db
+fastapi_music.db
+
 start_server.txt

@@ -8,6 +8,8 @@ from app.internal.model.song import Song
 from app.internal.model.youtube_cache import YouTubeCache
 import bcrypt
 import os
+from pathlib import Path
+from sqlalchemy.orm import Session
 
 
 class AdminAuth(AuthenticationBackend):
@@ -152,6 +154,11 @@ class SongAdmin(ModelView, model=Song):
 
 class YouTubeCacheAdmin(ModelView, model=YouTubeCache):
     """Admin view for YouTube Cache model"""
+    
+    def __init__(self):
+        super().__init__()
+        print("🚀 YouTubeCacheAdmin initialized!")
+    
     column_list = [
         YouTubeCache.id,
         YouTubeCache.video_id,
@@ -202,10 +209,163 @@ class YouTubeCacheAdmin(ModelView, model=YouTubeCache):
         YouTubeCache.user_id: "User ID",
         YouTubeCache.created_at: "Ngày tạo"
     }
-    
-    # Pagination
+      # Pagination
     page_size = 20
     page_size_options = [10, 20, 50, 100]
+    
+    def _delete_associated_files(self, cache_record: YouTubeCache):
+        """Delete thumbnail and audio files associated with YouTube cache record"""
+        files_deleted = []
+        
+        try:
+            print(f"🔍 Starting file deletion for video ID: {cache_record.video_id}")
+            print(f"📄 Thumbnail URL: {cache_record.thumbnail_url}")
+            print(f"🎵 Audio URL: {cache_record.audio_url}")
+            
+            # Lấy đường dẫn gốc của project - sửa lại để đúng với cấu trúc
+            current_file = Path(__file__)  # app/config/admin.py
+            project_root = current_file.parent.parent.parent  # Đi lên 3 cấp
+            uploads_dir = project_root / "uploads"
+            
+            print(f"📁 Current file: {current_file}")
+            print(f"📁 Project root: {project_root}")
+            print(f"📁 Uploads directory: {uploads_dir}")
+            print(f"📁 Uploads exists: {uploads_dir.exists()}")
+            
+            # Xóa thumbnail file nếu có
+            thumbnail_dir = uploads_dir / "thumbnails"
+            print(f"🖼️ Thumbnail directory: {thumbnail_dir}")
+            print(f"🖼️ Thumbnail dir exists: {thumbnail_dir.exists()}")
+            
+            if thumbnail_dir.exists():
+                # Liệt kê tất cả file trong thư mục thumbnail
+                all_thumbnails = list(thumbnail_dir.glob("*"))
+                print(f"🖼️ All thumbnail files: {[f.name for f in all_thumbnails]}")
+                
+                # Tìm file thumbnail theo video_id
+                matching_thumbnails = list(thumbnail_dir.glob(f"{cache_record.video_id}_*"))
+                print(f"🎯 Matching thumbnails for '{cache_record.video_id}': {[f.name for f in matching_thumbnails]}")
+                
+                for thumbnail_file in matching_thumbnails:
+                    if thumbnail_file.is_file():
+                        try:
+                            print(f"🗑️ Attempting to delete thumbnail: {thumbnail_file}")
+                            thumbnail_file.unlink()
+                            files_deleted.append(str(thumbnail_file))
+                            print(f"✅ Successfully deleted thumbnail: {thumbnail_file.name}")
+                        except PermissionError as e:
+                            print(f"🔒 Permission denied deleting {thumbnail_file}: {str(e)}")
+                        except Exception as e:
+                            print(f"❌ Failed to delete thumbnail {thumbnail_file}: {str(e)}")
+            else:
+                print(f"⚠️ Thumbnail directory does not exist: {thumbnail_dir}")
+            
+            # Xóa audio file nếu có
+            audio_dir = uploads_dir / "audio"
+            print(f"🎵 Audio directory: {audio_dir}")
+            print(f"🎵 Audio dir exists: {audio_dir.exists()}")
+            
+            if audio_dir.exists():
+                # Liệt kê tất cả file trong thư mục audio
+                all_audio = list(audio_dir.glob("*"))
+                print(f"🎵 All audio files: {[f.name for f in all_audio]}")
+                
+                # Tìm file audio theo video_id
+                matching_audio = list(audio_dir.glob(f"{cache_record.video_id}_*"))
+                print(f"🎯 Matching audio for '{cache_record.video_id}': {[f.name for f in matching_audio]}")
+                
+                for audio_file in matching_audio:
+                    if audio_file.is_file():
+                        try:
+                            print(f"🗑️ Attempting to delete audio: {audio_file}")
+                            audio_file.unlink()
+                            files_deleted.append(str(audio_file))
+                            print(f"✅ Successfully deleted audio: {audio_file.name}")
+                        except PermissionError as e:
+                            print(f"🔒 Permission denied deleting {audio_file}: {str(e)}")
+                        except Exception as e:
+                            print(f"❌ Failed to delete audio {audio_file}: {str(e)}")
+            else:
+                print(f"⚠️ Audio directory does not exist: {audio_dir}")
+                            
+        except Exception as e:
+            print(f"❌ Error deleting files for video {cache_record.video_id}: {str(e)}")
+            import traceback
+            print(f"🔧 Full traceback: {traceback.format_exc()}")
+            
+        print(f"📊 Total files deleted: {len(files_deleted)}")
+        return files_deleted
+          
+    async def on_model_delete(self, data: dict, request: Request) -> None:
+        """Hook gọi trước khi xóa model - cleanup files"""
+        try:
+            print(f"\n🗑️ ===== ON_MODEL_DELETE HOOK TRIGGERED =====")
+            print(f"📊 Data received: {data}")
+            
+            # Lấy thông tin record từ database
+            session = Session(engine)
+            try:
+                cache_record = session.get(YouTubeCache, data.get('id'))
+                if cache_record:
+                    print(f"📝 Found record: {cache_record.title}")
+                    print(f"🎬 Video ID: {cache_record.video_id}")
+                    
+                    # Xóa các file liên quan
+                    deleted_files = self._delete_associated_files(cache_record)
+                    
+                    print(f"📋 Summary: Deleted {len(deleted_files)} files")
+                else:
+                    print(f"⚠️ No cache record found with ID: {data.get('id')}")
+                    
+            finally:
+                session.close()
+                
+            print(f"🗑️ ===== ON_MODEL_DELETE COMPLETE =====\n")
+            
+        except Exception as e:
+            print(f"❌ Error in on_model_delete: {str(e)}")
+            import traceback
+            print(f"🔧 Full error traceback: {traceback.format_exc()}")
+    
+    async def delete_model(self, request: Request, pk: str):
+        """Override delete_model method"""
+        print(f"\n🔥 DELETE_MODEL CALLED - PK: {pk}")
+        await self._cleanup_files_by_pk(pk)
+        return await super().delete_model(request, pk)
+    
+    async def delete(self, request: Request, pk: str):
+        """Override delete method"""
+        print(f"\n🗑️ DELETE METHOD CALLED - PK: {pk}")
+        await self._cleanup_files_by_pk(pk)
+        return await super().delete(request, pk)
+    
+    async def _cleanup_files_by_pk(self, pk: str):
+        """Cleanup files by primary key"""
+        session = Session(engine)
+        try:
+            cache_record = session.get(YouTubeCache, pk)
+            if cache_record:
+                print(f"📝 Found record by PK: {cache_record.title} (Video: {cache_record.video_id})")
+                self._delete_associated_files(cache_record)
+            else:
+                print(f"⚠️ No record found with PK: {pk}")
+        finally:
+            session.close()
+    
+    async def _cleanup_files_by_data(self, data: dict):
+        """Cleanup files by data dict"""
+        session = Session(engine)
+        try:
+            record_id = data.get('id')
+            if record_id:
+                cache_record = session.get(YouTubeCache, record_id)
+                if cache_record:
+                    print(f"📝 Found record by data: {cache_record.title} (Video: {cache_record.video_id})")
+                    self._delete_associated_files(cache_record)
+                else:
+                    print(f"⚠️ No record found with ID from data: {record_id}")
+        finally:
+            session.close()
 
 
 def setup_admin(app):
