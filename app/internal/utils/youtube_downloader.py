@@ -194,26 +194,25 @@ class YouTubeDownloader:
                 return {
                     "success": False,
                     "message": "Download failed - file too small"
-                }
-              # Get video metadata
+                }            # Get video metadata
             thumbnails = info.get('thumbnails', [])
-            best_thumbnail_url = None
-            local_thumbnail_path = None
+            thumbnail_url = None  # Sẽ chứa đường dẫn local sau khi download
             
             if thumbnails:
                 sorted_thumbnails = sorted(thumbnails, 
                                           key=lambda x: ((x.get('width') or 0) * (x.get('height') or 0)), 
                                           reverse=True)
-                best_thumbnail_url = sorted_thumbnails[0].get('url') if sorted_thumbnails else None
+                original_thumbnail_url = sorted_thumbnails[0].get('url') if sorted_thumbnails else None
                 
                 # Download thumbnail to server
-                if best_thumbnail_url:
-                    thumbnail_result = self.download_thumbnail_to_server(best_thumbnail_url, video_id)
+                if original_thumbnail_url:
+                    thumbnail_result = self.download_thumbnail_to_server(original_thumbnail_url, video_id)
                     if thumbnail_result["success"]:
-                        local_thumbnail_path = thumbnail_result["local_thumbnail_path"]
-                        print(f"✓ Thumbnail saved: {local_thumbnail_path}")
+                        thumbnail_url = thumbnail_result["local_thumbnail_path"]  # Sử dụng đường dẫn local
+                        print(f"✓ Thumbnail saved: {thumbnail_url}")
                     else:
                         print(f"⚠ Failed to download thumbnail: {thumbnail_result['message']}")
+                        thumbnail_url = original_thumbnail_url  # Fallback về URL gốc nếu download thất bại
             
             duration = info.get('duration', 0)
             tags = info.get('tags', [])
@@ -231,8 +230,7 @@ class YouTubeDownloader:
                     "id": video_id,
                     "title": title,
                     "artist": uploader,
-                    "thumbnail_url": best_thumbnail_url,  # Original URL
-                    "local_thumbnail_url": local_thumbnail_path,  # Local server path
+                    "thumbnail_url": thumbnail_url,  # Đường dẫn local hoặc URL gốc
                     "audio_url": local_audio_path,  # Local server path
                     "duration": duration,
                     "duration_formatted": self._format_duration(duration),

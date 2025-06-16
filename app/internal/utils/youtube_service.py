@@ -51,8 +51,7 @@ class YouTubeService:
             
             # Save to cache database
             video_data = download_result["video_data"]
-            cache_entry = self.cache_repo.create_cache(video_data, user_id)
-            
+            cache_entry = self.cache_repo.create_cache(video_data, user_id)            
             # Return response with full domain URL
             return self._format_new_response(cache_entry, request)
             
@@ -74,7 +73,7 @@ class YouTubeService:
                 "id": cached_video.video_id,
                 "title": cached_video.title,
                 "artist": cached_video.artist,
-                "thumbnail_url": cached_video.thumbnail_url,
+                "thumbnail_url": f"{domain}{cached_video.thumbnail_url}" if cached_video.thumbnail_url and cached_video.thumbnail_url.startswith('/') else cached_video.thumbnail_url,
                 "audio_url": f"{domain}{cached_video.audio_url}",  # Full URL with domain
                 "duration": cached_video.duration,
                 "duration_formatted": cached_video.duration_formatted,
@@ -96,7 +95,7 @@ class YouTubeService:
                 "id": cache_entry.video_id,
                 "title": cache_entry.title,
                 "artist": cache_entry.artist,
-                "thumbnail_url": cache_entry.thumbnail_url,
+                "thumbnail_url": f"{domain}{cache_entry.thumbnail_url}" if cache_entry.thumbnail_url and cache_entry.thumbnail_url.startswith('/') else cache_entry.thumbnail_url,
                 "audio_url": f"{domain}{cache_entry.audio_url}",  # Full URL with domain
                 "duration": cache_entry.duration,
                 "duration_formatted": cache_entry.duration_formatted,
