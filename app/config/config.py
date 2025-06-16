@@ -35,5 +35,10 @@ class Settings(BaseSettings):
     CLOUDINARY_CLOUD_NAME: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
     CLOUDINARY_API_KEY: str = os.getenv("CLOUDINARY_API_KEY", "")
     CLOUDINARY_API_SECRET: str = os.getenv("CLOUDINARY_API_SECRET", "")
+    
+    # Admin Panel Configuration
+    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "musicadmin")
+    ADMIN_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "")
+    ADMIN_SECRET_KEY: str = os.getenv("ADMIN_SECRET_KEY", "your-very-secure-admin-secret-key-change-this")
 
 settings = Settings()

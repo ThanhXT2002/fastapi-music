@@ -13,7 +13,6 @@ fastapi_music.db
 .venv
 document/
 .env
-.env.example
 API_TEST_RESULTS.md
 test_api_corrected.py
 uploads/
