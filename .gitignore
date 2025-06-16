@@ -7,11 +7,6 @@ wheels/
 *.egg-info
 
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
 # Virtual environments
 .venv
 document/
