@@ -6,6 +6,12 @@ dist/
 wheels/
 *.egg-info
 
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
 # Virtual environments
 .venv
 document/
@@ -16,3 +22,5 @@ test_api_corrected.py
 uploads/
 ffmpeg/
 test_db_connection.py
+
+start_server.txt
