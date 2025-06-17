@@ -5,6 +5,16 @@ from app.config.config import settings
 import time
 from typing import Optional
 
+<<<<<<< HEAD
+=======
+# Import V2 models to ensure they are registered
+try:
+    from app.api.v2.models.song import SongV2, DownloadLogV2
+except ImportError:
+    # V2 models not available yet
+    pass
+
+>>>>>>> 124f01725468f45ddf6c3c1d86d7d85e926ea101
 # Import V3 models to ensure they are registered
 try:
     from app.api.v3.models.song import SongV3

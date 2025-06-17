@@ -9,8 +9,13 @@ V3_BASE = f"{BASE_URL}/api/v3"
 def test_v3_with_new_song():
     """Test V3 with a new song"""
     
+<<<<<<< HEAD
     # Test data - different video cd e:\API\fastapi-music; python test_v3_new.py
     youtube_url = "https://youtu.be/D74OdpziWKw?si=zmwUdTmVRXl8-Ort"  # A different video
+=======
+    # Test data - different video
+    youtube_url = "https://youtu.be/tB4zbIUFIkI"  # A different video
+>>>>>>> 124f01725468f45ddf6c3c1d86d7d85e926ea101
     
     print("=== Testing FastAPI Music V3 - New Song ===\n")
     
