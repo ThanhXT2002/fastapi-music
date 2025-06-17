@@ -1,16 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import os
-from pathlib import Path
-import aiofiles
-from typing import AsyncGenerator
 
 from app.config.database import get_db
-from app.config.config import settings
 from app.api.v3.schemas.song import SongInfoRequest, APIResponse
 from app.api.v3.controllers.song_controller import SongController
-from app.api.v3.models.song import SongV3, ProcessingStatus
 
 router = APIRouter(prefix="/songs", tags=["Songs V3"])
 song_controller = SongController()
@@ -48,50 +42,16 @@ async def download_song(
     """
     Tải file audio với streaming chunks
     """
-    # Check if song exists and is completed
-    song = db.query(SongV3).filter(SongV3.id == song_id).first()
-    
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    
-    if song.status != ProcessingStatus.COMPLETED:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Song is not ready for download. Status: {song.status.value}"
-        )
-    
-    if not song.audio_filename:
-        raise HTTPException(status_code=404, detail="Audio file not found")
-      # Get file path - handle both with and without extension
-    file_path = Path(settings.AUDIO_DIRECTORY) / song.audio_filename
-    
-    # If file doesn't exist, try with .m4a extension
-    if not file_path.exists() and not song.audio_filename.endswith('.m4a'):
-        file_path = Path(settings.AUDIO_DIRECTORY) / f"{song.audio_filename}.m4a"
-    
-    # If still doesn't exist, try without extension
-    if not file_path.exists() and song.audio_filename.endswith('.m4a'):
-        file_path = Path(settings.AUDIO_DIRECTORY) / song.audio_filename.replace('.m4a', '')
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Audio file not found on server")
-    
-    # Get file size
-    file_size = file_path.stat().st_size
-    
-    # Streaming function
-    async def file_streamer(file_path: Path, chunk_size: int = 8192) -> AsyncGenerator[bytes, None]:
-        async with aiofiles.open(file_path, 'rb') as file:
-            while chunk := await file.read(chunk_size):
-                yield chunk
+    # Sử dụng controller để lấy thông tin file
+    file_data = await song_controller.get_audio_file(song_id, db)
     
     # Return streaming response
     return StreamingResponse(
-        file_streamer(file_path),
+        song_controller.file_streamer(file_data["file_path"]),
         media_type='audio/mpeg',
         headers={
-            'Content-Disposition': f'attachment; filename="{song.title}.m4a"',
-            'Content-Length': str(file_size),
+            'Content-Disposition': f'attachment; filename="{file_data["safe_filename"]}"',
+            'Content-Length': str(file_data["file_size"]),
             'Accept-Ranges': 'bytes'
         }
     )
@@ -102,34 +62,15 @@ async def get_thumbnail(
     db: Session = Depends(get_db)
 ):
     """
-    Lấy thumbnail đã tải về (optional - vì có thể dùng thumbnail_url gốc)
+    Lấy thumbnail đã tải về
     """
-    song = db.query(SongV3).filter(SongV3.id == song_id).first()
-    
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    
-    if not song.thumbnail_filename:
-        raise HTTPException(status_code=404, detail="Thumbnail not available")
-    
-    file_path = Path(settings.THUMBNAIL_DIRECTORY) / song.thumbnail_filename
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Thumbnail file not found")
-    
-    # Determine media type
-    media_type = "image/jpeg"
-    if file_path.suffix.lower() in ['.png']:
-        media_type = "image/png"
-    elif file_path.suffix.lower() in ['.webp']:
-        media_type = "image/webp"
-    
-    async def file_streamer(file_path: Path) -> AsyncGenerator[bytes, None]:
-        async with aiofiles.open(file_path, 'rb') as file:
-            while chunk := await file.read(8192):
-                yield chunk
+    # Sử dụng controller để lấy thông tin thumbnail
+    thumbnail_data = await song_controller.get_thumbnail_file(song_id, db)
     
     return StreamingResponse(
-        file_streamer(file_path),
-        media_type=media_type
+        song_controller.file_streamer(thumbnail_data["file_path"]),
+        media_type=thumbnail_data["media_type"],
+        headers={
+            'Content-Disposition': f'inline; filename="{thumbnail_data["safe_filename"]}"'
+        }
     )
