@@ -2,17 +2,43 @@ import asyncio
 from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, BackgroundTasks
-from typing import Optional
+from typing import Optional, AsyncGenerator
+import os
+from pathlib import Path
+import aiofiles
+import re
+import unicodedata
 
 from app.api.v3.models.song import SongV3, ProcessingStatus
 from app.api.v3.schemas.song import (
     SongInfoResponse, StatusResponse, APIResponse
 )
 from app.api.v3.services.youtube_service import YouTubeService
+from app.config.config import settings
 
 class SongController:
     def __init__(self):
         self.youtube_service = YouTubeService()
+    
+    def sanitize_filename(self, filename: str) -> str:
+        """
+        Sanitize a filename to be used in Content-Disposition header:
+        - Remove emojis and non-ASCII characters
+        - Replace with ASCII approximations when possible
+        - Remove/replace special characters
+        """
+        # NFKD normalization to separate characters from combining marks
+        filename = unicodedata.normalize('NFKD', filename)
+        # Remove remaining non-ASCII characters
+        filename = re.sub(r'[^\x00-\x7F]+', '', filename)
+        # Replace problematic characters with underscores
+        filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
+        # Remove leading/trailing whitespace and dots
+        filename = filename.strip('. ')
+        # Ensure we have a valid filename
+        if not filename:
+            filename = "audio_file"
+        return filename
     
     async def get_song_info(
         self, 
@@ -134,3 +160,88 @@ class SongController:
             message="Status retrieved successfully",
             data=status_data.dict()
         )
+        
+    async def get_audio_file(self, song_id: str, db: Session):
+        """
+        Lấy file audio để phục vụ download
+        """
+        # Check if song exists and is completed
+        song = db.query(SongV3).filter(SongV3.id == song_id).first()
+        
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+        
+        if song.status != ProcessingStatus.COMPLETED:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Song is not ready for download. Status: {song.status.value}"
+            )
+        
+        if not song.audio_filename:
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        
+        # Get file path - handle both with and without extension
+        file_path = Path(settings.AUDIO_DIRECTORY) / song.audio_filename
+        
+        # If file doesn't exist, try with .m4a extension
+        if not file_path.exists() and not song.audio_filename.endswith('.m4a'):
+            file_path = Path(settings.AUDIO_DIRECTORY) / f"{song.audio_filename}.m4a"
+        
+        # If still doesn't exist, try without extension
+        if not file_path.exists() and song.audio_filename.endswith('.m4a'):
+            file_path = Path(settings.AUDIO_DIRECTORY) / song.audio_filename.replace('.m4a', '')
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Audio file not found on server")
+        
+        # Get file size
+        file_size = file_path.stat().st_size
+        
+        # Sanitize the title for the Content-Disposition header
+        safe_filename = self.sanitize_filename(song.title)
+        
+        return {
+            "file_path": file_path,
+            "file_size": file_size,
+            "safe_filename": f"{safe_filename}.m4a"
+        }
+    
+    async def get_thumbnail_file(self, song_id: str, db: Session):
+        """
+        Lấy file thumbnail để phục vụ hiển thị
+        """
+        song = db.query(SongV3).filter(SongV3.id == song_id).first()
+        
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+        
+        if not song.thumbnail_filename:
+            raise HTTPException(status_code=404, detail="Thumbnail not available")
+        
+        file_path = Path(settings.THUMBNAIL_DIRECTORY) / song.thumbnail_filename
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Thumbnail file not found")
+        
+        # Determine media type
+        media_type = "image/jpeg"
+        if file_path.suffix.lower() in ['.png']:
+            media_type = "image/png"
+        elif file_path.suffix.lower() in ['.webp']:
+            media_type = "image/webp"
+        
+        # Sanitize the title for the Content-Disposition header
+        safe_filename = self.sanitize_filename(song.title)
+        file_ext = file_path.suffix
+        
+        return {
+            "file_path": file_path,
+            "media_type": media_type,
+            "safe_filename": f"{safe_filename}{file_ext}"
+        }
+    
+    async def file_streamer(self, file_path: Path, chunk_size: int = 8192) -> AsyncGenerator[bytes, None]:
+        """Helper method to stream files"""
+        async with aiofiles.open(file_path, 'rb') as file:
+            while chunk := await file.read(chunk_size):
+                yield chunk
