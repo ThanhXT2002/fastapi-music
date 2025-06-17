@@ -5,6 +5,20 @@ from app.config.config import settings
 import time
 from typing import Optional
 
+# Import V2 models to ensure they are registered
+try:
+    from app.api.v2.models.song import SongV2, DownloadLogV2
+except ImportError:
+    # V2 models not available yet
+    pass
+
+# Import V3 models to ensure they are registered
+try:
+    from app.api.v3.models.song import SongV3
+except ImportError:
+    # V3 models not available yet
+    pass
+
 # Enhanced engine configuration for both SQLite and PostgreSQL
 if settings.DATABASE_URL.startswith("sqlite"):
     # SQLite specific configuration
