@@ -25,7 +25,7 @@ Tài liệu này mô tả cách triển khai một ứng dụng Angular để t�
 
 | Endpoint | Method | Mô tả |
 |----------|--------|-------|
-| `/api/v3/songs/info/{youtube_url}` | GET | Lấy thông tin bài hát và bắt đầu tải (URL cần encode) |
+| `/api/v3/songs/info?youtube_url={url}` | POST | Lấy thông tin bài hát và bắt đầu tải (URL qua query parameter) |
 | `/api/v3/songs/status/{song_id}` | GET | Kiểm tra trạng thái xử lý |
 | `/api/v3/songs/download/{song_id}` | GET | Tải file nhạc |
 | `/api/v3/songs/thumbnail/{song_id}` | GET | Lấy thumbnail |
@@ -82,7 +82,7 @@ Triển khai Music Service để tương tác với API:
 ```typescript
 // src/app/services/music.service.ts
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, BehaviorSubject, interval } from 'rxjs';
 import { map, switchMap, takeWhile, tap } from 'rxjs/operators';
 import { ApiResponse, SongInfo, SongStatus } from '../models/song.model';
@@ -98,15 +98,14 @@ export class MusicService {
   currentSong$ = this.currentSongSubject.asObservable();
   songStatus$ = this.statusPollingSubject.asObservable();
 
-  constructor(private http: HttpClient) {}
-  /**
+  constructor(private http: HttpClient) {}  /**
    * Lấy thông tin bài hát từ YouTube URL và bắt đầu tải về
    */
   getSongInfo(youtubeUrl: string): Observable<SongInfo> {
-    // Encode URL để truyền qua path parameter
-    const encodedUrl = encodeURIComponent(youtubeUrl);
+    // Sử dụng HttpParams để tạo query parameter
+    const params = new HttpParams().set('youtube_url', youtubeUrl);
     
-    return this.http.get<ApiResponse<SongInfo>>(`${this.apiUrl}/songs/info/${encodedUrl}`)
+    return this.http.post<ApiResponse<SongInfo>>(`${this.apiUrl}/songs/info`, null, { params })
       .pipe(
         map(response => {
           if (!response.success) {
@@ -830,22 +829,6 @@ const apiRequest = request.clone({
   }
 });
 ```
-
-### C. URL Encoding trong Angular
-
-Khi sử dụng API V3 với path parameter, luôn nhớ encode URL:
-
-```typescript
-// Đúng cách
-const youtubeUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-const encodedUrl = encodeURIComponent(youtubeUrl);
-const apiUrl = `/api/v3/songs/info/${encodedUrl}`;
-
-// Sai cách - sẽ gây lỗi 404
-const apiUrl = `/api/v3/songs/info/${youtubeUrl}`;
-```
-
-**Lưu ý:** Angular HttpClient sẽ không tự động encode path parameters, vì vậy cần phải encode manually.
 
 ## Thay đổi API V3 - URL Encoding
 
