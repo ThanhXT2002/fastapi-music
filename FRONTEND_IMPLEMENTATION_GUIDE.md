@@ -831,6 +831,22 @@ const apiRequest = request.clone({
 });
 ```
 
+### C. URL Encoding trong Angular
+
+Khi sử dụng API V3 với path parameter, luôn nhớ encode URL:
+
+```typescript
+// Đúng cách
+const youtubeUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+const encodedUrl = encodeURIComponent(youtubeUrl);
+const apiUrl = `/api/v3/songs/info/${encodedUrl}`;
+
+// Sai cách - sẽ gây lỗi 404
+const apiUrl = `/api/v3/songs/info/${youtubeUrl}`;
+```
+
+**Lưu ý:** Angular HttpClient sẽ không tự động encode path parameters, vì vậy cần phải encode manually.
+
 ## Thay đổi API V3 - URL Encoding
 
 ### Lưu ý quan trọng về API `/api/v3/songs/info/{youtube_url}`
