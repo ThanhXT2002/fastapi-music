@@ -25,7 +25,7 @@ Tài liệu này mô tả cách triển khai một ứng dụng Angular để t�
 
 | Endpoint | Method | Mô tả |
 |----------|--------|-------|
-| `/api/v3/songs/info` | POST | Lấy thông tin bài hát và bắt đầu tải |
+| `/api/v3/songs/info/{youtube_url}` | GET | Lấy thông tin bài hát và bắt đầu tải (URL cần encode) |
 | `/api/v3/songs/status/{song_id}` | GET | Kiểm tra trạng thái xử lý |
 | `/api/v3/songs/download/{song_id}` | GET | Tải file nhạc |
 | `/api/v3/songs/thumbnail/{song_id}` | GET | Lấy thumbnail |
@@ -99,12 +99,14 @@ export class MusicService {
   songStatus$ = this.statusPollingSubject.asObservable();
 
   constructor(private http: HttpClient) {}
-
   /**
    * Lấy thông tin bài hát từ YouTube URL và bắt đầu tải về
    */
   getSongInfo(youtubeUrl: string): Observable<SongInfo> {
-    return this.http.post<ApiResponse<SongInfo>>(`${this.apiUrl}/songs/info`, { youtube_url: youtubeUrl })
+    // Encode URL để truyền qua path parameter
+    const encodedUrl = encodeURIComponent(youtubeUrl);
+    
+    return this.http.get<ApiResponse<SongInfo>>(`${this.apiUrl}/songs/info/${encodedUrl}`)
       .pipe(
         map(response => {
           if (!response.success) {
@@ -828,3 +830,17 @@ const apiRequest = request.clone({
   }
 });
 ```
+
+## Thay đổi API V3 - URL Encoding
+
+### Lưu ý quan trọng về API `/api/v3/songs/info/{youtube_url}`
+
+API này đã được thay đổi từ POST với request body thành GET với path parameter. Điều này có nghĩa là:
+
+1. **URL phải được encode**: YouTube URL chứa các ký tự đặc biệt (`:`, `/`, `?`, `=`) nên cần encode trước khi gửi
+2. **Sử dụng encodeURIComponent()**: Trong JavaScript/TypeScript sử dụng hàm này để encode URL
+
+**Ví dụ:**
+- URL gốc: `https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+- URL encoded: `https%3A//www.youtube.com/watch%3Fv%3DdQw4w9WgXcQ`
+- API call: `GET /api/v3/songs/info/https%3A//www.youtube.com/watch%3Fv%3DdQw4w9WgXcQ`
