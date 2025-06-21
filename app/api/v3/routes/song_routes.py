@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from urllib.parse import unquote
 
 from app.config.database import get_db
 from app.api.v3.schemas.song import SongInfoRequest, APIResponse
@@ -9,17 +10,21 @@ from app.api.v3.controllers.song_controller import SongController
 router = APIRouter(prefix="/songs", tags=["Songs V3"])
 song_controller = SongController()
 
-@router.post("/info", response_model=APIResponse)
+@router.get("/info/{youtube_url:path}", response_model=APIResponse)
 async def get_song_info(
-    request: SongInfoRequest,
+    youtube_url: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Lấy thông tin bài hát từ YouTube URL và bắt đầu quá trình tải về
+    URL cần được encode trước khi gửi (ví dụ: https%3A//www.youtube.com/watch%3Fv%3DdQw4w9WgXcQ)
     """
+    # Decode URL từ path parameter
+    decoded_url = unquote(youtube_url)
+    
     return await song_controller.get_song_info(
-        request.youtube_url, 
+        decoded_url, 
         db, 
         background_tasks
     )
