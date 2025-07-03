@@ -316,7 +316,7 @@ class SongController:
             for song in completed_songs:
                 # Tạo streaming URLs
                 audio_url = f"{settings.BASE_URL}/api/v3/songs/download/{song.id}"
-                thumbnail_streaming_url = f"{settings.BASE_URL}/api/v3/songs/thumbnail/{song.id}"
+                thumbnail_url = f"{settings.BASE_URL}/api/v3/songs/thumbnail/{song.id}"
                 
                 # Parse keywords
                 keywords = []
@@ -329,9 +329,8 @@ class SongController:
                     artist=song.artist,
                     duration=song.duration,
                     duration_formatted=song.duration_formatted,
-                    thumbnail_url=song.thumbnail_url,  # Original YouTube thumbnail
+                    thumbnail_url=thumbnail_url,  # Server streaming URL
                     audio_url=audio_url,
-                    thumbnail_streaming_url=thumbnail_streaming_url,
                     keywords=keywords
                 )
                 songs_data.append(song_data)

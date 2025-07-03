@@ -1,8 +1,31 @@
 # 🎵 FastAPI Music Streaming API - V3 Documentation
 
-## ✨ **New Completed Songs Endpoint**
+## ✨ **New Completed Songs Endpoint**### **Direct Streaming URLs**
+Các URL này có thể được sử dụng trực tiếp trong:
+- HTML5 `<audio>` và `<img>` tags ✅ **STREAMING MODE**
+- Video players (VLC, etc.)
+- Mobile apps
+- Streaming services
 
-### **GET /api/v3/songs/completed**
+**Example:**
+```html
+<!-- ✅ Audio streaming (mặc định) -->
+<audio controls>
+  <source src="http://localhost:8000/api/v3/songs/download/dQw4w9WgXcQ" type="audio/mpeg">
+</audio>
+
+<!-- ✅ Audio download -->
+<a href="http://localhost:8000/api/v3/songs/download/dQw4w9WgXcQ?download=true" download>
+  Download MP3
+</a>
+
+<!-- ✅ Thumbnail display -->
+<img src="http://localhost:8000/api/v3/songs/thumbnail/dQw4w9WgXcQ" alt="Song thumbnail">
+```
+
+**URL Parameters:**
+- `download=false` (mặc định): Streaming trực tiếp với `Content-Disposition: inline`
+- `download=true`: Download file với `Content-Disposition: attachment`# **GET /api/v3/songs/completed**
 Lấy tất cả bài hát đã hoàn thành với URL streaming trực tiếp.
 
 **Query Parameters:**
@@ -38,9 +61,8 @@ GET /api/v3/songs/completed?limit=1
         "artist": "Rick Astley",
         "duration": 213,
         "duration_formatted": "03:33",
-        "thumbnail_url": "https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/maxresdefault.webp",
+        "thumbnail_url": "http://localhost:8000/api/v3/songs/thumbnail/dQw4w9WgXcQ",
         "audio_url": "http://localhost:8000/api/v3/songs/download/dQw4w9WgXcQ",
-        "thumbnail_streaming_url": "http://localhost:8000/api/v3/songs/thumbnail/dQw4w9WgXcQ",
         "keywords": ["Music", "rick astley", "Never Gonna Give You Up", "nggyu", "never gonna give you up lyrics", "rick rolled"]
       }
     ],
@@ -55,9 +77,8 @@ GET /api/v3/songs/completed?limit=1
 - `artist`: Tên ca sĩ/kênh
 - `duration`: Thời lượng (giây)
 - `duration_formatted`: Thời lượng định dạng MM:SS
-- `thumbnail_url`: URL thumbnail gốc từ YouTube (có thể hết hạn)
+- `thumbnail_url`: URL streaming thumbnail từ server (luôn khả dụng)
 - `audio_url`: URL streaming audio từ server (luôn khả dụng)
-- `thumbnail_streaming_url`: URL streaming thumbnail từ server (luôn khả dụng)
 - `keywords`: Danh sách từ khóa
 
 ## 🎯 **Use Cases**
@@ -75,7 +96,7 @@ data.data.songs.forEach(song => {
   audioElement.controls = true;
   
   const thumbnail = document.createElement('img');
-  thumbnail.src = song.thumbnail_streaming_url;
+  thumbnail.src = song.thumbnail_url;
   thumbnail.alt = song.title;
   
   // Add to playlist...
@@ -88,8 +109,11 @@ data.data.songs.forEach(song => {
 const playlistData = await fetch('http://your-server.com/api/v3/songs/completed')
   .then(res => res.json());
 
-// Use audio_url for streaming
+// ✅ Use audio_url for streaming (auto inline mode)
 <Audio source={{ uri: song.audio_url }} />
+
+// ✅ Download functionality
+const downloadUrl = `${song.audio_url}?download=true`;
 ```
 
 ### 3. **Direct Streaming URLs**
@@ -98,6 +122,122 @@ Các URL này có thể được sử dụng trực tiếp trong:
 - Video players (VLC, etc.)
 - Mobile apps
 - Streaming services
+
+## 🎵 **Angular/Frontend Integration Examples**
+
+### **Angular Component Example:**
+```typescript
+// music-player.component.ts
+import { Component, OnInit } from '@angular/core';
+
+@Component({
+  selector: 'app-music-player',
+  template: `
+    <div *ngFor="let song of songs" class="song-item">
+      <img [src]="song.thumbnail_url" [alt]="song.title" class="thumbnail">
+      <div class="song-info">
+        <h3>{{ song.title }}</h3>
+        <p>{{ song.artist }} - {{ song.duration_formatted }}</p>
+        
+        <!-- ✅ Streaming Audio Player -->
+        <audio controls [src]="song.audio_url">
+          Your browser does not support the audio element.
+        </audio>
+        
+        <!-- ✅ Download Button -->
+        <a [href]="getDownloadUrl(song.audio_url)" download class="download-btn">
+          Download
+        </a>
+      </div>
+    </div>
+  `
+})
+export class MusicPlayerComponent implements OnInit {
+  songs: any[] = [];
+
+  async ngOnInit() {
+    const response = await fetch('/api/v3/songs/completed?limit=20');
+    const data = await response.json();
+    this.songs = data.data.songs;
+  }
+
+  getDownloadUrl(audioUrl: string): string {
+    return `${audioUrl}?download=true`;
+  }
+}
+```
+
+### **Vue.js Example:**
+```vue
+<template>
+  <div v-for="song in songs" :key="song.id" class="song-card">
+    <img :src="song.thumbnail_url" :alt="song.title" class="thumbnail">
+    <h3>{{ song.title }}</h3>
+    <p>{{ song.artist }}</p>
+    
+    <!-- ✅ Streaming -->
+    <audio controls :src="song.audio_url"></audio>
+    
+    <!-- ✅ Download -->
+    <a :href="`${song.audio_url}?download=true`" download>Download</a>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      songs: []
+    };
+  },
+  async mounted() {
+    const response = await fetch('/api/v3/songs/completed');
+    const data = await response.json();
+    this.songs = data.data.songs;
+  }
+};
+</script>
+```
+
+### **React Example:**
+```jsx
+import React, { useState, useEffect } from 'react';
+
+function MusicPlayer() {
+  const [songs, setSongs] = useState([]);
+
+  useEffect(() => {
+    async function loadSongs() {
+      const response = await fetch('/api/v3/songs/completed');
+      const data = await response.json();
+      setSongs(data.data.songs);
+    }
+    loadSongs();
+  }, []);
+
+  return (
+    <div>
+      {songs.map(song => (
+        <div key={song.id} className="song-card">
+          <img src={song.thumbnail_url} alt={song.title} className="thumbnail" />
+          <h3>{song.title}</h3>
+          <p>{song.artist} - {song.duration_formatted}</p>
+          
+          {/* ✅ Streaming */}
+          <audio controls src={song.audio_url}>
+            Your browser does not support the audio element.
+          </audio>
+          
+          {/* ✅ Download */}
+          <a href={`${song.audio_url}?download=true`} download>
+            Download
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
 
 ## 🔧 **Technical Features**
 
@@ -112,6 +252,7 @@ Các URL này có thể được sử dụng trực tiếp trong:
 - ✅ **Resume Support**: Hỗ trợ `Accept-Ranges: bytes`
 - ✅ **Proper Headers**: Content-Type, Content-Length, Content-Disposition
 - ✅ **Error Handling**: Xử lý lỗi file không tồn tại
+- ✅ **Unified URLs**: Chỉ cần 2 URL cho audio và thumbnail
 
 ### **Cross-Platform Support**
 - ✅ **CORS Enabled**: Hỗ trợ cross-origin requests

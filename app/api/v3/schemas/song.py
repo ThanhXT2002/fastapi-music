@@ -44,9 +44,8 @@ class CompletedSongResponse(BaseModel):
     artist: Optional[str]
     duration: int
     duration_formatted: str
-    thumbnail_url: str  # URL gốc từ YouTube
+    thumbnail_url: str  # URL để streaming thumbnail từ server
     audio_url: str      # URL để streaming audio
-    thumbnail_streaming_url: str  # URL để streaming thumbnail từ server
     keywords: List[str]
 
 class CompletedSongsListResponse(BaseModel):
