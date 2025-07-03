@@ -11,7 +11,7 @@ import unicodedata
 
 from app.api.v3.models.song import SongV3, ProcessingStatus
 from app.api.v3.schemas.song import (
-    SongInfoResponse, StatusResponse, APIResponse
+    SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse
 )
 from app.api.v3.services.youtube_service import YouTubeService
 from app.config.config import settings
@@ -213,18 +213,34 @@ class SongController:
         if not song.audio_filename:
             raise HTTPException(status_code=404, detail="Audio file not found")
         
-        # Get file path - handle both with and without extension
-        file_path = Path(settings.AUDIO_DIRECTORY) / song.audio_filename
+        # Try different file path patterns
+        audio_dir = Path(settings.AUDIO_DIRECTORY)
+        possible_paths = []
         
-        # If file doesn't exist, try with .m4a extension
-        if not file_path.exists() and not song.audio_filename.endswith('.m4a'):
-            file_path = Path(settings.AUDIO_DIRECTORY) / f"{song.audio_filename}.m4a"
+        # 1. Exact filename from database
+        possible_paths.append(audio_dir / song.audio_filename)
         
-        # If still doesn't exist, try without extension
-        if not file_path.exists() and song.audio_filename.endswith('.m4a'):
-            file_path = Path(settings.AUDIO_DIRECTORY) / song.audio_filename.replace('.m4a', '')
+        # 2. Add .m4a extension if not present
+        if not song.audio_filename.endswith('.m4a'):
+            possible_paths.append(audio_dir / f"{song.audio_filename}.m4a")
         
-        if not file_path.exists():
+        # 3. Try pattern matching for files starting with song_id
+        for audio_file in audio_dir.glob(f"{song_id}_*.m4a"):
+            if audio_file.is_file():
+                possible_paths.append(audio_file)
+        
+        # 4. Try without extension if current has extension
+        if song.audio_filename.endswith('.m4a'):
+            possible_paths.append(audio_dir / song.audio_filename.replace('.m4a', ''))
+        
+        # Find the first existing file
+        file_path = None
+        for path in possible_paths:
+            if path.exists() and path.is_file():
+                file_path = path
+                break
+        
+        if not file_path:
             raise HTTPException(status_code=404, detail="Audio file not found on server")
         
         # Get file size
@@ -278,3 +294,52 @@ class SongController:
         async with aiofiles.open(file_path, 'rb') as file:
             while chunk := await file.read(chunk_size):
                 yield chunk
+    
+    async def get_completed_songs(self, db: Session) -> APIResponse:
+        """
+        Lấy tất cả bài hát đã hoàn thành với URL streaming
+        """
+        try:
+            # Query all completed songs
+            completed_songs = db.query(SongV3).filter(
+                SongV3.status == ProcessingStatus.COMPLETED,
+                SongV3.audio_filename.isnot(None)
+            ).order_by(SongV3.created_at.desc()).all()
+            
+            songs_data = []
+            for song in completed_songs:
+                # Tạo streaming URLs
+                audio_url = f"{settings.BASE_URL}/api/v3/songs/download/{song.id}"
+                thumbnail_streaming_url = f"{settings.BASE_URL}/api/v3/songs/thumbnail/{song.id}"
+                
+                # Parse keywords
+                keywords = []
+                if song.keywords:
+                    keywords = [k.strip() for k in song.keywords.split(',') if k.strip()]
+                
+                song_data = CompletedSongResponse(
+                    id=song.id,
+                    title=song.title,
+                    artist=song.artist,
+                    duration=song.duration,
+                    duration_formatted=song.duration_formatted,
+                    thumbnail_url=song.thumbnail_url,  # Original YouTube thumbnail
+                    audio_url=audio_url,
+                    thumbnail_streaming_url=thumbnail_streaming_url,
+                    keywords=keywords
+                )
+                songs_data.append(song_data)
+            
+            response_data = CompletedSongsListResponse(
+                songs=songs_data,
+                total=len(songs_data)
+            )
+            
+            return APIResponse(
+                success=True,
+                message=f"Retrieved {len(songs_data)} completed songs",
+                data=response_data.dict()
+            )
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get completed songs: {str(e)}")

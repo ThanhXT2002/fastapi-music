@@ -75,3 +75,12 @@ async def get_thumbnail(
             'Content-Disposition': f'inline; filename="{thumbnail_data["safe_filename"]}"'
         }
     )
+
+@router.get("/completed", response_model=APIResponse)
+async def get_completed_songs(
+    db: Session = Depends(get_db)
+):
+    """
+    Lấy tất cả bài hát đã hoàn thành với URL streaming
+    """
+    return await song_controller.get_completed_songs(db)

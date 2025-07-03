@@ -36,3 +36,20 @@ class APIResponse(BaseModel):
     success: bool
     message: str
     data: Optional[dict] = None
+
+class CompletedSongResponse(BaseModel):
+    """Response schema for completed songs with streaming URLs"""
+    id: str
+    title: str
+    artist: Optional[str]
+    duration: int
+    duration_formatted: str
+    thumbnail_url: str  # URL gốc từ YouTube
+    audio_url: str      # URL để streaming audio
+    thumbnail_streaming_url: str  # URL để streaming thumbnail từ server
+    keywords: List[str]
+
+class CompletedSongsListResponse(BaseModel):
+    """Response schema for list of completed songs"""
+    songs: List[CompletedSongResponse]
+    total: int

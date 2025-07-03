@@ -66,5 +66,12 @@ app.include_router(api_v3_router, prefix="/api/v3")
 app.mount("/audio", StaticFiles(directory=settings.AUDIO_DIRECTORY), name="audio")
 app.mount("/thumbnails", StaticFiles(directory=settings.THUMBNAIL_DIRECTORY), name="thumbnails")
 
+# Serve test HTML file
+@app.get("/test")
+async def serve_test():
+    """Serve test streaming HTML page"""
+    from fastapi.responses import FileResponse
+    return FileResponse("test_streaming.html")
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

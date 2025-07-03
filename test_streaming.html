@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FastAPI Music Streaming Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .song-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .song-info {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .thumbnail {
+            width: 120px;
+            height: 90px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        .song-details h3 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+        .song-details p {
+            margin: 0;
+            color: #666;
+        }
+        .keywords {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .keyword {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #1976d2;
+        }
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 FastAPI Music Streaming Test</h1>
+    <div id="loading" class="loading">Loading songs...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="songs-container"></div>
+
+    <script>
+        async function loadSongs() {
+            try {
+                const response = await fetch('/api/v3/songs/completed');
+                const result = await response.json();
+                
+                document.getElementById('loading').style.display = 'none';
+                
+                if (result.success) {
+                    displaySongs(result.data.songs);
+                } else {
+                    showError('Failed to load songs: ' + result.message);
+                }
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                showError('Error loading songs: ' + error.message);
+            }
+        }
+
+        function displaySongs(songs) {
+            const container = document.getElementById('songs-container');
+            container.innerHTML = '';
+
+            if (songs.length === 0) {
+                container.innerHTML = '<p>No completed songs found.</p>';
+                return;
+            }
+
+            songs.forEach(song => {
+                const songCard = document.createElement('div');
+                songCard.className = 'song-card';
+                
+                const keywords = song.keywords.map(keyword => 
+                    `<span class="keyword">${keyword}</span>`
+                ).join('');
+
+                songCard.innerHTML = `
+                    <div class="song-info">
+                        <img src="${song.thumbnail_streaming_url}" alt="${song.title}" class="thumbnail" 
+                             onerror="this.src='${song.thumbnail_url}'">
+                        <div class="song-details">
+                            <h3>${song.title}</h3>
+                            <p><strong>Artist:</strong> ${song.artist || 'Unknown'}</p>
+                            <p><strong>Duration:</strong> ${song.duration_formatted}</p>
+                            <div class="keywords">${keywords}</div>
+                        </div>
+                    </div>
+                    <audio controls preload="metadata">
+                        <source src="${song.audio_url}" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                `;
+                
+                container.appendChild(songCard);
+            });
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        // Load songs when page loads
+        document.addEventListener('DOMContentLoaded', loadSongs);
+    </script>
+</body>
+</html>
