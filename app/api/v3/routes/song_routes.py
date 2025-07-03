@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -38,22 +38,29 @@ def get_song_status(
 @router.get("/download/{song_id}")
 async def download_song(
     song_id: str,
+    download: bool = Query(default=False, description="True để download file, False để streaming"),
     db: Session = Depends(get_db)
 ):
     """
-    Tải file audio với streaming chunks
+    Stream hoặc download file audio
+    - download=false (mặc định): Streaming trực tiếp cho HTML5 audio
+    - download=true: Download file về máy
     """
     # Sử dụng controller để lấy thông tin file
     file_data = await song_controller.get_audio_file(song_id, db)
+    
+    # Chọn Content-Disposition dựa trên parameter
+    disposition = "attachment" if download else "inline"
     
     # Return streaming response
     return StreamingResponse(
         song_controller.file_streamer(file_data["file_path"]),
         media_type='audio/mpeg',
         headers={
-            'Content-Disposition': f'attachment; filename="{file_data["safe_filename"]}"',
+            'Content-Disposition': f'{disposition}; filename="{file_data["safe_filename"]}"',
             'Content-Length': str(file_data["file_size"]),
-            'Accept-Ranges': 'bytes'
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=3600'
         }
     )
 
@@ -75,3 +82,16 @@ async def get_thumbnail(
             'Content-Disposition': f'inline; filename="{thumbnail_data["safe_filename"]}"'
         }
     )
+
+@router.get("/completed", response_model=APIResponse)
+async def get_completed_songs(
+    limit: int = Query(default=100, ge=1, le=1000, description="Number of songs to return (1-1000, default 100)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Lấy tất cả bài hát đã hoàn thành với URL streaming
+    
+    Parameters:
+    - limit: Số lượng bài hát trả về (1-1000, mặc định 100)
+    """
+    return await song_controller.get_completed_songs(db, limit)

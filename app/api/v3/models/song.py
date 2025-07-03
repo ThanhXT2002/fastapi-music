@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, Text, Enum as SQLEnum
+from sqlalchemy import Column, String, Integer, DateTime, Text, Enum as SQLEnum, Index
 from datetime import datetime
 import enum
 from app.config.database import Base
@@ -35,3 +35,10 @@ class SongV3(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
+
+    # Indexes for better performance
+    __table_args__ = (
+        Index('idx_songs_v3_status', 'status'),
+        Index('idx_songs_v3_created_at', 'created_at'),
+        Index('idx_songs_v3_status_completed_at', 'status', 'completed_at'),
+    )

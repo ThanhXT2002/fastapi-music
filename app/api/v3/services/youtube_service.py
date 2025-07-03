@@ -58,8 +58,15 @@ class YouTubeService:
         else:
             return f"{minutes:02d}:{seconds:02d}"
     
-    async def get_video_info(self, url: str) -> Dict[str, Any]:
-        """Get video information without downloading"""
+    async def get_video_info(self, url: str, quick_check: bool = False) -> Dict[str, Any]:
+        """
+        Get video information without downloading
+        quick_check: Nếu True, sẽ giảm delay và timeout cho việc kiểm tra nhanh
+        """
+        # Reduced timeouts and delays for quick checks
+        socket_timeout = 15 if quick_check else 30
+        delay_range = (0.5, 1.5) if quick_check else (1, 3)
+        
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
@@ -73,14 +80,14 @@ class YouTubeService:
                 'Keep-Alive': '300',
                 'Connection': 'keep-alive',
             },
-            'socket_timeout': 30,
-            'retries': 3,
+            'socket_timeout': socket_timeout,
+            'retries': 2 if quick_check else 3,
             'nocheckcertificate': True,
         }
         
         def _extract_info():
             # Thêm delay ngẫu nhiên để tránh rate limiting
-            time.sleep(random.uniform(1, 3))
+            time.sleep(random.uniform(*delay_range))
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=False)
         
