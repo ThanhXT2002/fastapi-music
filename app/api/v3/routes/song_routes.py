@@ -11,16 +11,16 @@ song_controller = SongController()
 
 @router.post("/info", response_model=APIResponse)
 async def get_song_info(
-    youtube_url: str,
+    request_data: SongInfoRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Lấy thông tin bài hát từ YouTube URL và bắt đầu quá trình tải về
-    URL được truyền qua query parameter: /api/v3/songs/info?youtube_url=...
+    Body format: {"youtube_url": "https://www.youtube.com/watch?v=..."}
     """
     return await song_controller.get_song_info(
-        youtube_url, 
+        request_data.youtube_url, 
         db, 
         background_tasks
     )
