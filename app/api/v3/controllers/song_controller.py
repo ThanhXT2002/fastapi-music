@@ -11,7 +11,7 @@ import unicodedata
 
 from app.api.v3.models.song import SongV3, ProcessingStatus
 from app.api.v3.schemas.song import (
-    SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse
+    SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse, CompletedSongsQueryParams
 )
 from app.api.v3.services.youtube_service import YouTubeService
 from app.config.config import settings
@@ -295,16 +295,22 @@ class SongController:
             while chunk := await file.read(chunk_size):
                 yield chunk
     
-    async def get_completed_songs(self, db: Session) -> APIResponse:
+    async def get_completed_songs(self, db: Session, limit: int = 100) -> APIResponse:
         """
         Lấy tất cả bài hát đã hoàn thành với URL streaming
         """
         try:
-            # Query all completed songs
+            # Validate limit
+            if not isinstance(limit, int) or limit < 1:
+                limit = 100
+            elif limit > 1000:
+                limit = 1000
+            
+            # Query all completed songs with limit
             completed_songs = db.query(SongV3).filter(
                 SongV3.status == ProcessingStatus.COMPLETED,
                 SongV3.audio_filename.isnot(None)
-            ).order_by(SongV3.created_at.desc()).all()
+            ).order_by(SongV3.created_at.desc()).limit(limit).all()
             
             songs_data = []
             for song in completed_songs:
@@ -337,7 +343,7 @@ class SongController:
             
             return APIResponse(
                 success=True,
-                message=f"Retrieved {len(songs_data)} completed songs",
+                message=f"Retrieved {len(songs_data)} completed songs (limit: {limit})",
                 data=response_data.dict()
             )
             

@@ -5,11 +5,31 @@
 ### **GET /api/v3/songs/completed**
 Lấy tất cả bài hát đã hoàn thành với URL streaming trực tiếp.
 
+**Query Parameters:**
+- `limit` (integer, optional): Số lượng bài hát trả về
+  - Mặc định: `100`
+  - Tối thiểu: `1`
+  - Tối đa: `1000`
+  - Kiểu dữ liệu: Integer
+  - Nếu không hợp lệ: Tự động sử dụng giá trị mặc định
+
+**Examples:**
+```bash
+# Lấy 100 bài hát mặc định
+GET /api/v3/songs/completed
+
+# Lấy 10 bài hát gần nhất
+GET /api/v3/songs/completed?limit=10
+
+# Lấy 1 bài hát gần nhất
+GET /api/v3/songs/completed?limit=1
+```
+
 **Response Format:**
 ```json
 {
   "success": true,
-  "message": "Retrieved 5 completed songs",
+  "message": "Retrieved 2 completed songs (limit: 2)",
   "data": {
     "songs": [
       {
@@ -24,7 +44,7 @@ Lấy tất cả bài hát đã hoàn thành với URL streaming trực tiếp.
         "keywords": ["Music", "rick astley", "Never Gonna Give You Up", "nggyu", "never gonna give you up lyrics", "rick rolled"]
       }
     ],
-    "total": 5
+    "total": 2
   }
 }
 ```
@@ -98,6 +118,30 @@ Các URL này có thể được sử dụng trực tiếp trong:
 - ✅ **Multiple Formats**: M4A, MP3, WebM
 - ✅ **Thumbnail Formats**: JPG, PNG, WebP
 
+## 🔧 **Limit Parameter Features**
+
+### **Smart Validation**
+- ✅ **Type Safety**: Chỉ chấp nhận integer
+- ✅ **Range Validation**: 1-1000 bài hát
+- ✅ **Default Value**: 100 bài hát nếu không chỉ định
+- ✅ **Error Messages**: Thông báo lỗi rõ ràng cho giá trị không hợp lệ
+
+### **Use Cases**
+```javascript
+// Lấy 10 bài hát mới nhất cho homepage
+const latest = await fetch('/api/v3/songs/completed?limit=10');
+
+// Lấy 1 bài hát ngẫu nhiên
+const random = await fetch('/api/v3/songs/completed?limit=1');
+
+// Lấy tất cả bài hát cho admin panel
+const all = await fetch('/api/v3/songs/completed?limit=1000');
+
+// Pagination example
+const page1 = await fetch('/api/v3/songs/completed?limit=20'); // Page 1
+// Note: Để pagination hoàn chỉnh, cần thêm offset parameter
+```
+
 ## 🧪 **Testing**
 
 ### **Web Test Page**
@@ -105,11 +149,28 @@ Truy cập: `http://localhost:8000/test`
 
 ### **API Test**
 ```bash
-# PowerShell
+# PowerShell - Lấy 100 bài hát mặc định
 Invoke-WebRequest -Uri "http://localhost:8000/api/v3/songs/completed" -Method GET
 
+# PowerShell - Lấy 5 bài hát gần nhất
+Invoke-WebRequest -Uri "http://localhost:8000/api/v3/songs/completed?limit=5" -Method GET
+
 # curl (if available)
-curl -X GET "http://localhost:8000/api/v3/songs/completed"
+curl -X GET "http://localhost:8000/api/v3/songs/completed?limit=10"
+```
+
+### **Validation Examples**
+```bash
+# ✅ Valid requests
+GET /api/v3/songs/completed?limit=1       # Returns 1 song
+GET /api/v3/songs/completed?limit=50      # Returns 50 songs
+GET /api/v3/songs/completed?limit=1000    # Returns 1000 songs (max)
+
+# ❌ Invalid requests (auto-corrected by FastAPI)
+GET /api/v3/songs/completed?limit=0       # Error: Input should be >= 1
+GET /api/v3/songs/completed?limit=1001    # Error: Input should be <= 1000
+GET /api/v3/songs/completed?limit=abc     # Error: Invalid integer
+GET /api/v3/songs/completed?limit=-5      # Error: Input should be >= 1
 ```
 
 ### **Direct Streaming Test**
@@ -132,8 +193,21 @@ curl -I "http://localhost:8000/api/v3/songs/thumbnail/dQw4w9WgXcQ"
 
 ## 🚀 **Next Steps**
 
-1. **Pagination**: Thêm pagination cho danh sách lớn
+1. **Pagination**: Thêm `offset` parameter để pagination hoàn chỉnh
 2. **Search**: Tìm kiếm theo title, artist, keywords
-3. **Sorting**: Sắp xếp theo ngày, tên, thời lượng
-4. **Caching**: Cache kết quả API
-5. **CDN**: Tích hợp CDN cho streaming tốt hơn
+3. **Sorting**: Sắp xếp theo ngày, tên, thời lượng, views
+4. **Filtering**: Lọc theo artist, duration, keywords
+5. **Caching**: Cache kết quả API với Redis
+6. **CDN**: Tích hợp CDN cho streaming tốt hơn
+
+### **Pagination Example (Future)**
+```bash
+# Page 1: 20 bài hát đầu tiên
+GET /api/v3/songs/completed?limit=20&offset=0
+
+# Page 2: 20 bài hát tiếp theo
+GET /api/v3/songs/completed?limit=20&offset=20
+
+# Page 3: 20 bài hát tiếp theo
+GET /api/v3/songs/completed?limit=20&offset=40
+```

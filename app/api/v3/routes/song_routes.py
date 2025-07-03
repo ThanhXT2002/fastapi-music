@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -78,9 +78,13 @@ async def get_thumbnail(
 
 @router.get("/completed", response_model=APIResponse)
 async def get_completed_songs(
+    limit: int = Query(default=100, ge=1, le=1000, description="Number of songs to return (1-1000, default 100)"),
     db: Session = Depends(get_db)
 ):
     """
     Lấy tất cả bài hát đã hoàn thành với URL streaming
+    
+    Parameters:
+    - limit: Số lượng bài hát trả về (1-1000, mặc định 100)
     """
-    return await song_controller.get_completed_songs(db)
+    return await song_controller.get_completed_songs(db, limit)
