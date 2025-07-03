@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 from sqlalchemy.orm import Session
-from fastapi import HTTPException, BackgroundTasks
+from fastapi import HTTPException, BackgroundTasks, Request
 from typing import Optional, AsyncGenerator
 import os
 from pathlib import Path
@@ -19,6 +19,32 @@ from app.config.config import settings
 class SongController:
     def __init__(self):
         self.youtube_service = YouTubeService()
+    
+    def get_domain_url(self, request: Request) -> str:
+        """Get domain URL automatically for production or development"""
+        try:
+            # Check for proxy headers (ngrok, cloudflare, nginx)
+            forwarded_proto = request.headers.get('x-forwarded-proto')
+            forwarded_host = request.headers.get('x-forwarded-host')
+            
+            if forwarded_proto and forwarded_host:
+                return f"{forwarded_proto}://{forwarded_host}"
+            
+            # Check for standard proxy headers
+            host = request.headers.get('host')
+            if host:
+                # Check if HTTPS
+                if 'https' in str(request.url) or request.headers.get('x-forwarded-proto') == 'https':
+                    return f"https://{host}"
+                else:
+                    return f"http://{host}"
+            
+            # Fallback to request base URL
+            base_url = str(request.base_url).rstrip('/')
+            return base_url
+        except:
+            # Last resort fallback
+            return settings.BASE_URL
     
     def sanitize_filename(self, filename: str) -> str:
         """
@@ -295,7 +321,7 @@ class SongController:
             while chunk := await file.read(chunk_size):
                 yield chunk
     
-    async def get_completed_songs(self, db: Session, limit: int = 100) -> APIResponse:
+    async def get_completed_songs(self, db: Session, limit: int = 100, request: Request = None) -> APIResponse:
         """
         Lấy tất cả bài hát đã hoàn thành với URL streaming
         """
@@ -314,9 +340,15 @@ class SongController:
             
             songs_data = []
             for song in completed_songs:
-                # Tạo streaming URLs
-                audio_url = f"{settings.BASE_URL}/api/v3/songs/download/{song.id}"
-                thumbnail_url = f"{settings.BASE_URL}/api/v3/songs/thumbnail/{song.id}"
+                # Tự động detect domain từ request
+                if request:
+                    base_url = self.get_domain_url(request)
+                else:
+                    base_url = settings.BASE_URL
+                
+                # Tạo streaming URLs với domain đúng
+                audio_url = f"{base_url}/api/v3/songs/download/{song.id}"
+                thumbnail_url = f"{base_url}/api/v3/songs/thumbnail/{song.id}"
                 
                 # Parse keywords
                 keywords = []
