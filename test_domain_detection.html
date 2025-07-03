@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Domain Detection</title>
+</head>
+<body>
+    <h1>Test Domain Detection</h1>
+    
+    <div>
+        <h2>Test localhost:8000</h2>
+        <button onclick="testAPI('http://localhost:8000')">Test localhost:8000</button>
+        <div id="result1"></div>
+    </div>
+    
+    <div>
+        <h2>Test với custom domain header</h2>
+        <button onclick="testAPIWithHeaders()">Test with custom headers</button>
+        <div id="result2"></div>
+    </div>
+    
+    <script>
+        async function testAPI(baseUrl) {
+            try {
+                const response = await fetch(`${baseUrl}/api/v3/songs/completed?limit=2`);
+                const data = await response.json();
+                
+                document.getElementById('result1').innerHTML = `
+                    <h3>Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                // Check domain in URLs
+                if (data.success && data.data.songs.length > 0) {
+                    const song = data.data.songs[0];
+                    console.log('Audio URL:', song.audio_url);
+                    console.log('Thumbnail URL:', song.thumbnail_url);
+                }
+            } catch (error) {
+                document.getElementById('result1').innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        async function testAPIWithHeaders() {
+            try {
+                // Simulate production domain với headers
+                const response = await fetch('http://localhost:8000/api/v3/songs/completed?limit=2', {
+                    headers: {
+                        'X-Forwarded-Proto': 'https',
+                        'X-Forwarded-Host': 'api-music.tranxuanthanhtxt.com'
+                    }
+                });
+                const data = await response.json();
+                
+                document.getElementById('result2').innerHTML = `
+                    <h3>Response with Custom Headers:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                // Check domain in URLs
+                if (data.success && data.data.songs.length > 0) {
+                    const song = data.data.songs[0];
+                    console.log('Audio URL with headers:', song.audio_url);
+                    console.log('Thumbnail URL with headers:', song.thumbnail_url);
+                }
+            } catch (error) {
+                document.getElementById('result2').innerHTML = `Error: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>
