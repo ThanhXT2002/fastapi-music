@@ -87,6 +87,7 @@ async def get_thumbnail(
 async def get_completed_songs(
     request: Request,
     limit: int = Query(default=100, ge=1, le=1000, description="Number of songs to return (1-1000, default 100)"),
+    key: str = Query(default=None, description="Keyword to search for similar songs (fuzzy matching)"),
     db: Session = Depends(get_db)
 ):
     """
@@ -94,5 +95,6 @@ async def get_completed_songs(
     
     Parameters:
     - limit: Số lượng bài hát trả về (1-1000, mặc định 100)
+    - key: Từ khóa để tìm kiếm bài hát có keyword gần giống (nếu không truyền thì lấy tất cả)
     """
-    return await song_controller.get_completed_songs(db, limit, request)
+    return await song_controller.get_completed_songs(db, limit, request, key)

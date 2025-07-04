@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from fastapi import HTTPException, BackgroundTasks, Request
 from typing import Optional, AsyncGenerator
 import os
@@ -321,9 +322,10 @@ class SongController:
             while chunk := await file.read(chunk_size):
                 yield chunk
     
-    async def get_completed_songs(self, db: Session, limit: int = 100, request: Request = None) -> APIResponse:
+    async def get_completed_songs(self, db: Session, limit: int = 100, request: Request = None, search_key: str = None) -> APIResponse:
         """
         Lấy tất cả bài hát đã hoàn thành với URL streaming
+        OPTIMIZED: Tối ưu tốc độ cho database lớn
         """
         try:
             # Validate limit
@@ -332,28 +334,50 @@ class SongController:
             elif limit > 1000:
                 limit = 1000
             
-            # Query all completed songs with limit
-            completed_songs = db.query(SongV3).filter(
+            # Base query với index optimization
+            query = db.query(SongV3).filter(
                 SongV3.status == ProcessingStatus.COMPLETED,
                 SongV3.audio_filename.isnot(None)
-            ).order_by(SongV3.created_at.desc()).limit(limit).all()
+            )
             
-            songs_data = []
-            for song in completed_songs:
-                # Tự động detect domain từ request
-                if request:
-                    base_url = self.get_domain_url(request)
-                else:
-                    base_url = settings.BASE_URL
+            if search_key:
+                # Tối ưu: Thử database search trước nếu có thể
+                search_key_lower = search_key.lower().strip()
                 
-                # Tạo streaming URLs với domain đúng
+                # Quick database filter trước khi loop
+                db_filtered = query.filter(
+                    or_(
+                        SongV3.keywords.ilike(f'%{search_key_lower}%'),
+                        SongV3.title.ilike(f'%{search_key_lower}%'),
+                        SongV3.artist.ilike(f'%{search_key_lower}%')
+                    )
+                ).order_by(SongV3.created_at.desc()).all()
+                
+                # Nếu database filter trả về ít hơn limit*2, dùng luôn
+                if len(db_filtered) <= limit * 2:
+                    # Apply scoring và limit
+                    filtered_songs = self._filter_songs_by_fuzzy_keywords(db_filtered, search_key)
+                    completed_songs = filtered_songs[:limit]
+                else:
+                    # Nếu quá nhiều, lấy tất cả rồi filter
+                    all_songs = query.order_by(SongV3.created_at.desc()).all()
+                    filtered_songs = self._filter_songs_by_fuzzy_keywords(all_songs, search_key)
+                    completed_songs = filtered_songs[:limit]
+            else:
+                # Không có search key - query trực tiếp với limit
+                completed_songs = query.order_by(SongV3.created_at.desc()).limit(limit).all()
+            
+            # Build response nhanh nhất có thể
+            songs_data = []
+            base_url = self.get_domain_url(request) if request else settings.BASE_URL
+            
+            for song in completed_songs:
+                # Pre-compute URLs
                 audio_url = f"{base_url}/api/v3/songs/download/{song.id}"
                 thumbnail_url = f"{base_url}/api/v3/songs/thumbnail/{song.id}"
                 
-                # Parse keywords
-                keywords = []
-                if song.keywords:
-                    keywords = [k.strip() for k in song.keywords.split(',') if k.strip()]
+                # Quick keyword parsing
+                keywords = [k.strip() for k in song.keywords.split(',') if k.strip()] if song.keywords else []
                 
                 song_data = CompletedSongResponse(
                     id=song.id,
@@ -361,7 +385,7 @@ class SongController:
                     artist=song.artist,
                     duration=song.duration,
                     duration_formatted=song.duration_formatted,
-                    thumbnail_url=thumbnail_url,  # Server streaming URL
+                    thumbnail_url=thumbnail_url,
                     audio_url=audio_url,
                     keywords=keywords
                 )
@@ -372,11 +396,88 @@ class SongController:
                 total=len(songs_data)
             )
             
+            search_info = f" matching '{search_key}'" if search_key else ""
             return APIResponse(
                 success=True,
-                message=f"Retrieved {len(songs_data)} completed songs (limit: {limit})",
+                message=f"Retrieved {len(songs_data)} completed songs{search_info} (limit: {limit})",
                 data=response_data.dict()
             )
             
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to get completed songs: {str(e)}")
+    
+    def _filter_songs_by_fuzzy_keywords(self, songs, search_key: str):
+        """
+        Lọc bài hát dựa trên exact/substring matching - OPTIMIZED VERSION
+        Tối ưu tốc độ cho 5000+ bài hát
+        """
+        if not search_key:
+            return songs
+            
+        search_key_lower = search_key.lower().strip()
+        search_words = search_key_lower.split()
+        matched_songs = []
+        
+        for song in songs:
+            total_score = 0
+            
+            # 1. Check Keywords - Priority cao nhất
+            if song.keywords:
+                keywords_lower = song.keywords.lower()
+                
+                # Exact match check nhanh nhất
+                if search_key_lower in keywords_lower:
+                    if f",{search_key_lower}," in f",{keywords_lower}," or keywords_lower.startswith(f"{search_key_lower},") or keywords_lower.endswith(f",{search_key_lower}") or keywords_lower == search_key_lower:
+                        total_score += 100  # Exact keyword match
+                    else:
+                        total_score += 80   # Substring in keywords
+                elif any(word in keywords_lower for word in search_words):
+                    total_score += 60   # Word match in keywords
+            
+            # 2. Check Title - Nếu chưa đủ điểm mới check
+            if total_score < 60 and song.title:
+                title_lower = song.title.lower()
+                if search_key_lower == title_lower:
+                    total_score += 50   # Exact title
+                elif search_key_lower in title_lower:
+                    total_score += 30   # Substring in title
+                elif any(word in title_lower for word in search_words):
+                    total_score += 20   # Word in title
+            
+            # 3. Check Artist - Chỉ check nếu cần
+            if total_score < 40 and song.artist:
+                artist_lower = song.artist.lower()
+                if search_key_lower == artist_lower:
+                    total_score += 30   # Exact artist
+                elif search_key_lower in artist_lower:
+                    total_score += 20   # Substring in artist
+                elif any(word in artist_lower for word in search_words):
+                    total_score += 10   # Word in artist
+            
+            # Chỉ add nếu có match (score > 0)
+            if total_score > 0:
+                matched_songs.append((song, total_score))
+        
+        # Sort theo score giảm dần
+        matched_songs.sort(key=lambda x: x[1], reverse=True)
+        return [song for song, score in matched_songs]
+    
+    def _calculate_similarity(self, str1: str, str2: str) -> float:
+        """
+        Tính độ tương đồng giữa 2 chuỗi (simple character-based similarity)
+        Không dùng nữa vì chuyển sang exact/substring matching
+        """
+        if not str1 or not str2:
+            return 0.0
+            
+        # Simple character-based similarity
+        set1 = set(str1.lower())
+        set2 = set(str2.lower())
+        
+        intersection = len(set1.intersection(set2))
+        union = len(set1.union(set2))
+        
+        if union == 0:
+            return 0.0
+            
+        return intersection / union

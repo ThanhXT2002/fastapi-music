@@ -56,6 +56,7 @@ class CompletedSongsListResponse(BaseModel):
 class CompletedSongsQueryParams(BaseModel):
     """Query parameters for completed songs endpoint"""
     limit: Optional[int] = Field(default=100, ge=1, le=1000, description="Number of songs to return (1-1000)")
+    key: Optional[str] = Field(default=None, description="Keyword to search for similar songs (fuzzy matching)")
     
     @validator('limit', pre=True)
     def validate_limit(cls, v):
@@ -73,3 +74,11 @@ class CompletedSongsQueryParams(BaseModel):
         if v > 1000:
             return 1000
         return v
+    
+    @validator('key', pre=True)
+    def validate_key(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            return v.strip()
+        return None
