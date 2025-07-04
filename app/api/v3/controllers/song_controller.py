@@ -67,6 +67,43 @@ class SongController:
             filename = "audio_file"
         return filename
     
+    def normalize_vietnamese_text(self, text: str) -> str:
+        """
+        Normalize Vietnamese text for better search matching:
+        - Remove diacritics (dấu): không lời → khong loi
+        - Convert to lowercase
+        - Remove extra spaces
+        """
+        if not text:
+            return ""
+        
+        # Convert to lowercase first
+        text = text.lower()
+        
+        # Vietnamese diacritics mapping
+        vietnamese_map = {
+            'à': 'a', 'á': 'a', 'ả': 'a', 'ã': 'a', 'ạ': 'a',
+            'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ặ': 'a',
+            'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ậ': 'a',
+            'è': 'e', 'é': 'e', 'ẻ': 'e', 'ẽ': 'e', 'ẹ': 'e',
+            'ê': 'e', 'ề': 'e', 'ế': 'e', 'ể': 'e', 'ễ': 'e', 'ệ': 'e',
+            'ì': 'i', 'í': 'i', 'ỉ': 'i', 'ĩ': 'i', 'ị': 'i',
+            'ò': 'o', 'ó': 'o', 'ỏ': 'o', 'õ': 'o', 'ọ': 'o',
+            'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ổ': 'o', 'ỗ': 'o', 'ộ': 'o',
+            'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ở': 'o', 'ỡ': 'o', 'ợ': 'o',
+            'ù': 'u', 'ú': 'u', 'ủ': 'u', 'ũ': 'u', 'ụ': 'u',
+            'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ử': 'u', 'ữ': 'u', 'ự': 'u',
+            'ỳ': 'y', 'ý': 'y', 'ỷ': 'y', 'ỹ': 'y', 'ỵ': 'y',
+            'đ': 'd'
+        }
+        
+        # Replace Vietnamese characters
+        for vn_char, en_char in vietnamese_map.items():
+            text = text.replace(vn_char, en_char)
+        
+        # Remove extra spaces and return
+        return re.sub(r'\s+', ' ', text).strip()
+    
     async def get_song_info(
         self, 
         youtube_url: str, 
@@ -409,13 +446,14 @@ class SongController:
     def _filter_songs_by_fuzzy_keywords(self, songs, search_key: str):
         """
         Lọc bài hát dựa trên exact/substring matching - OPTIMIZED VERSION
-        Tối ưu tốc độ cho 5000+ bài hát
+        Tối ưu tốc độ cho 5000+ bài hát + xử lý dấu tiếng Việt
         """
         if not search_key:
             return songs
             
         search_key_lower = search_key.lower().strip()
-        search_words = search_key_lower.split()
+        search_key_normalized = self.normalize_vietnamese_text(search_key_lower)
+        search_words = search_key_normalized.split()
         matched_songs = []
         
         for song in songs:
@@ -424,34 +462,51 @@ class SongController:
             # 1. Check Keywords - Priority cao nhất
             if song.keywords:
                 keywords_lower = song.keywords.lower()
+                keywords_normalized = self.normalize_vietnamese_text(keywords_lower)
                 
-                # Exact match check nhanh nhất
-                if search_key_lower in keywords_lower:
-                    if f",{search_key_lower}," in f",{keywords_lower}," or keywords_lower.startswith(f"{search_key_lower},") or keywords_lower.endswith(f",{search_key_lower}") or keywords_lower == search_key_lower:
+                # Exact match check với cả có dấu và không dấu
+                if search_key_lower in keywords_lower or search_key_normalized in keywords_normalized:
+                    # Check exact keyword match
+                    if (f",{search_key_lower}," in f",{keywords_lower}," or 
+                        keywords_lower.startswith(f"{search_key_lower},") or 
+                        keywords_lower.endswith(f",{search_key_lower}") or 
+                        keywords_lower == search_key_lower or
+                        f",{search_key_normalized}," in f",{keywords_normalized}," or 
+                        keywords_normalized.startswith(f"{search_key_normalized},") or 
+                        keywords_normalized.endswith(f",{search_key_normalized}") or 
+                        keywords_normalized == search_key_normalized):
                         total_score += 100  # Exact keyword match
                     else:
                         total_score += 80   # Substring in keywords
-                elif any(word in keywords_lower for word in search_words):
+                elif any(word in keywords_normalized for word in search_words):
                     total_score += 60   # Word match in keywords
             
             # 2. Check Title - Nếu chưa đủ điểm mới check
             if total_score < 60 and song.title:
                 title_lower = song.title.lower()
-                if search_key_lower == title_lower:
+                title_normalized = self.normalize_vietnamese_text(title_lower)
+                
+                if (search_key_lower == title_lower or 
+                    search_key_normalized == title_normalized):
                     total_score += 50   # Exact title
-                elif search_key_lower in title_lower:
+                elif (search_key_lower in title_lower or 
+                      search_key_normalized in title_normalized):
                     total_score += 30   # Substring in title
-                elif any(word in title_lower for word in search_words):
+                elif any(word in title_normalized for word in search_words):
                     total_score += 20   # Word in title
             
             # 3. Check Artist - Chỉ check nếu cần
             if total_score < 40 and song.artist:
                 artist_lower = song.artist.lower()
-                if search_key_lower == artist_lower:
+                artist_normalized = self.normalize_vietnamese_text(artist_lower)
+                
+                if (search_key_lower == artist_lower or 
+                    search_key_normalized == artist_normalized):
                     total_score += 30   # Exact artist
-                elif search_key_lower in artist_lower:
+                elif (search_key_lower in artist_lower or 
+                      search_key_normalized in artist_normalized):
                     total_score += 20   # Substring in artist
-                elif any(word in artist_lower for word in search_words):
+                elif any(word in artist_normalized for word in search_words):
                     total_score += 10   # Word in artist
             
             # Chỉ add nếu có match (score > 0)
