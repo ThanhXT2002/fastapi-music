@@ -9,6 +9,7 @@ from pathlib import Path
 import aiofiles
 import re
 import unicodedata
+from unidecode import unidecode
 
 from app.api.v3.models.song import SongV3, ProcessingStatus
 from app.api.v3.schemas.song import (
@@ -69,10 +70,10 @@ class SongController:
     
     def normalize_vietnamese_text(self, text: str) -> str:
         """
-        Normalize Vietnamese text for better search matching:
-        - Remove diacritics (dấu): không lời → khong loi
-        - Convert to lowercase
-        - Remove extra spaces
+        Normalize Vietnamese text using unidecode for perfect diacritics removal:
+        - "hưng" → "hung"
+        - "không lời" → "khong loi"  
+        - "nhạc" → "nhac"
         """
         if not text:
             return ""
@@ -80,29 +81,11 @@ class SongController:
         # Convert to lowercase first
         text = text.lower()
         
-        # Vietnamese diacritics mapping
-        vietnamese_map = {
-            'à': 'a', 'á': 'a', 'ả': 'a', 'ã': 'a', 'ạ': 'a',
-            'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ặ': 'a',
-            'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ậ': 'a',
-            'è': 'e', 'é': 'e', 'ẻ': 'e', 'ẽ': 'e', 'ẹ': 'e',
-            'ê': 'e', 'ề': 'e', 'ế': 'e', 'ể': 'e', 'ễ': 'e', 'ệ': 'e',
-            'ì': 'i', 'í': 'i', 'ỉ': 'i', 'ĩ': 'i', 'ị': 'i',
-            'ò': 'o', 'ó': 'o', 'ỏ': 'o', 'õ': 'o', 'ọ': 'o',
-            'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ổ': 'o', 'ỗ': 'o', 'ộ': 'o',
-            'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ở': 'o', 'ỡ': 'o', 'ợ': 'o',
-            'ù': 'u', 'ú': 'u', 'ủ': 'u', 'ũ': 'u', 'ụ': 'u',
-            'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ử': 'u', 'ữ': 'u', 'ự': 'u',
-            'ỳ': 'y', 'ý': 'y', 'ỷ': 'y', 'ỹ': 'y', 'ỵ': 'y',
-            'đ': 'd'
-        }
-        
-        # Replace Vietnamese characters
-        for vn_char, en_char in vietnamese_map.items():
-            text = text.replace(vn_char, en_char)
+        # Use unidecode for perfect Vietnamese → ASCII conversion
+        normalized = unidecode(text)
         
         # Remove extra spaces and return
-        return re.sub(r'\s+', ' ', text).strip()
+        return re.sub(r'\s+', ' ', normalized).strip()
     
     async def get_song_info(
         self, 
@@ -380,18 +363,28 @@ class SongController:
             if search_key:
                 # Tối ưu: Thử database search trước nếu có thể
                 search_key_lower = search_key.lower().strip()
+                search_key_normalized = unidecode(search_key_lower)  # Add normalized version
                 
-                # Quick database filter trước khi loop
+                # Quick database filter trước khi loop - search cả original và normalized
                 db_filtered = query.filter(
                     or_(
                         SongV3.keywords.ilike(f'%{search_key_lower}%'),
                         SongV3.title.ilike(f'%{search_key_lower}%'),
-                        SongV3.artist.ilike(f'%{search_key_lower}%')
+                        SongV3.artist.ilike(f'%{search_key_lower}%'),
+                        # THÊM: search với normalized text
+                        SongV3.keywords.ilike(f'%{search_key_normalized}%'),
+                        SongV3.title.ilike(f'%{search_key_normalized}%'),
+                        SongV3.artist.ilike(f'%{search_key_normalized}%')
                     )
                 ).order_by(SongV3.created_at.desc()).all()
                 
-                # Nếu database filter trả về ít hơn limit*2, dùng luôn
-                if len(db_filtered) <= limit * 2:
+                # DEBUG: Nếu database filter không có kết quả, bypass nó
+                if len(db_filtered) == 0:
+                    # Fallback: Lấy tất cả songs và filter bằng algorithm
+                    all_songs = query.order_by(SongV3.created_at.desc()).all()
+                    filtered_songs = self._filter_songs_by_fuzzy_keywords(all_songs, search_key)
+                    completed_songs = filtered_songs[:limit]
+                elif len(db_filtered) <= limit * 2:
                     # Apply scoring và limit
                     filtered_songs = self._filter_songs_by_fuzzy_keywords(db_filtered, search_key)
                     completed_songs = filtered_songs[:limit]
@@ -445,94 +438,101 @@ class SongController:
     
     def _filter_songs_by_fuzzy_keywords(self, songs, search_key: str):
         """
-        Lọc bài hát dựa trên exact/substring matching - OPTIMIZED VERSION
-        Tối ưu tốc độ cho 5000+ bài hát + xử lý dấu tiếng Việt
+        ULTRA OPTIMIZED: Fast search với unidecode + simplified algorithm
+        Target: <100ms cho 5000 bài hát
         """
         if not search_key:
             return songs
             
-        search_key_lower = search_key.lower().strip()
-        search_key_normalized = self.normalize_vietnamese_text(search_key_lower)
-        search_words = search_key_normalized.split()
+        # Pre-normalize search key một lần
+        search_lower = search_key.lower().strip()
+        search_normalized = unidecode(search_lower)
+        search_words = search_normalized.split()
+        
+        # DEBUG: Print để kiểm tra
+        print(f"🔍 Search: '{search_key}' → '{search_lower}' → '{search_normalized}'")
+        print(f"📊 Total songs to check: {len(songs)}")
+        
         matched_songs = []
         
         for song in songs:
-            total_score = 0
+            score = 0
             
-            # 1. Check Keywords - Priority cao nhất
+            # 1. Quick Keywords check (highest priority)
             if song.keywords:
-                keywords_lower = song.keywords.lower()
-                keywords_normalized = self.normalize_vietnamese_text(keywords_lower)
+                keywords_norm = unidecode(song.keywords.lower())
+                keyword_score = self._quick_field_score(search_lower, search_normalized, search_words, 
+                                               song.keywords.lower(), keywords_norm, multiplier=3)
+                score += keyword_score
                 
-                # Exact match check với cả có dấu và không dấu
-                if search_key_lower in keywords_lower or search_key_normalized in keywords_normalized:
-                    # Check exact keyword match
-                    if (f",{search_key_lower}," in f",{keywords_lower}," or 
-                        keywords_lower.startswith(f"{search_key_lower},") or 
-                        keywords_lower.endswith(f",{search_key_lower}") or 
-                        keywords_lower == search_key_lower or
-                        f",{search_key_normalized}," in f",{keywords_normalized}," or 
-                        keywords_normalized.startswith(f"{search_key_normalized},") or 
-                        keywords_normalized.endswith(f",{search_key_normalized}") or 
-                        keywords_normalized == search_key_normalized):
-                        total_score += 100  # Exact keyword match
-                    else:
-                        total_score += 80   # Substring in keywords
-                elif any(word in keywords_normalized for word in search_words):
-                    total_score += 60   # Word match in keywords
+                # DEBUG: Log nếu có match trong keywords
+                if keyword_score > 0:
+                    print(f"🎯 KEYWORD MATCH: '{song.title}' - Keywords: '{song.keywords}' → Normalized: '{keywords_norm}' - Score: {keyword_score}")
             
-            # 2. Check Title - Nếu chưa đủ điểm mới check
-            if total_score < 60 and song.title:
-                title_lower = song.title.lower()
-                title_normalized = self.normalize_vietnamese_text(title_lower)
+            # 2. Title check (nếu chưa đủ điểm)
+            if score < 80 and song.title:
+                title_norm = unidecode(song.title.lower())
+                title_score = self._quick_field_score(search_lower, search_normalized, search_words,
+                                               song.title.lower(), title_norm, multiplier=2)
+                score += title_score
                 
-                if (search_key_lower == title_lower or 
-                    search_key_normalized == title_normalized):
-                    total_score += 50   # Exact title
-                elif (search_key_lower in title_lower or 
-                      search_key_normalized in title_normalized):
-                    total_score += 30   # Substring in title
-                elif any(word in title_normalized for word in search_words):
-                    total_score += 20   # Word in title
+                # DEBUG: Log nếu có match trong title
+                if title_score > 0:
+                    print(f"📝 TITLE MATCH: '{song.title}' → Normalized: '{title_norm}' - Score: {title_score}")
             
-            # 3. Check Artist - Chỉ check nếu cần
-            if total_score < 40 and song.artist:
-                artist_lower = song.artist.lower()
-                artist_normalized = self.normalize_vietnamese_text(artist_lower)
+            # 3. Artist check (chỉ khi cần thiết)
+            if score < 40 and song.artist:
+                artist_norm = unidecode(song.artist.lower())
+                artist_score = self._quick_field_score(search_lower, search_normalized, search_words,
+                                               song.artist.lower(), artist_norm, multiplier=1)
+                score += artist_score
                 
-                if (search_key_lower == artist_lower or 
-                    search_key_normalized == artist_normalized):
-                    total_score += 30   # Exact artist
-                elif (search_key_lower in artist_lower or 
-                      search_key_normalized in artist_normalized):
-                    total_score += 20   # Substring in artist
-                elif any(word in artist_normalized for word in search_words):
-                    total_score += 10   # Word in artist
+                # DEBUG: Log nếu có match trong artist
+                if artist_score > 0:
+                    print(f"👤 ARTIST MATCH: '{song.artist}' → Normalized: '{artist_norm}' - Score: {artist_score}")
             
-            # Chỉ add nếu có match (score > 0)
-            if total_score > 0:
-                matched_songs.append((song, total_score))
+            # Add nếu có score
+            if score > 0:
+                matched_songs.append((song, score))
+                print(f"✅ TOTAL MATCH: '{song.title}' - Total Score: {score}")
         
-        # Sort theo score giảm dần
+        # Quick sort và return
         matched_songs.sort(key=lambda x: x[1], reverse=True)
-        return [song for song, score in matched_songs]
+        print(f"🏆 Final matches: {len(matched_songs)}")
+        
+        return [song for song, _ in matched_songs]
     
-    def _calculate_similarity(self, str1: str, str2: str) -> float:
+    def _quick_field_score(self, search_orig, search_norm, search_words, field_orig, field_norm, multiplier=1):
         """
-        Tính độ tương đồng giữa 2 chuỗi (simple character-based similarity)
-        Không dùng nữa vì chuyển sang exact/substring matching
+        Simplified scoring function - tối ưu tốc độ
         """
-        if not str1 or not str2:
-            return 0.0
-            
-        # Simple character-based similarity
-        set1 = set(str1.lower())
-        set2 = set(str2.lower())
+        # 1. Exact match (original hoặc normalized)
+        if search_orig == field_orig or search_norm == field_norm:
+            return 50 * multiplier
         
-        intersection = len(set1.intersection(set2))
-        union = len(set1.union(set2))
-        
-        if union == 0:
-            return 0.0
+        # 2. Substring (original hoặc normalized)
+        if search_orig in field_orig or search_norm in field_norm:
+            return 35 * multiplier
             
-        return intersection / union
+        # 3. Reverse substring
+        if field_orig in search_orig or field_norm in search_norm:
+            return 25 * multiplier
+        
+        # 4. Word matching (chỉ với normalized)
+        if any(word in field_norm for word in search_words if len(word) >= 2):
+            return 15 * multiplier
+            
+        # 5. Prefix/suffix matching (simplified)
+        for word in search_words:
+            if len(word) >= 3:
+                for field_word in field_norm.split():
+                    if len(field_word) >= 3:
+                        # Prefix: "tik" in "tiktok"
+                        if field_word.startswith(word) and len(word) >= len(field_word) * 0.6:
+                            return 20 * multiplier
+                        # Suffix: "tok" in "tiktok"  
+                        if field_word.endswith(word) and len(word) >= len(field_word) * 0.6:
+                            return 18 * multiplier
+        
+        return 0
+    
