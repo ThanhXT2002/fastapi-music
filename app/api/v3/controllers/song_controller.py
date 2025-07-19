@@ -11,6 +11,12 @@ import re
 import unicodedata
 from unidecode import unidecode
 
+import base64
+import hashlib
+import hmac
+import time
+import requests
+
 from app.api.v3.models.song import SongV3, ProcessingStatus
 from app.api.v3.schemas.song import (
     SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse, CompletedSongsQueryParams
@@ -19,8 +25,71 @@ from app.api.v3.services.youtube_service import YouTubeService
 from app.config.config import settings
 
 class SongController:
+
     def __init__(self):
         self.youtube_service = YouTubeService()
+        
+        
+    def identify_song_by_file(self, file_bytes: bytes) -> APIResponse:
+        """
+        Identify song by file using direct HTTP API integration with ACRCloud.
+        """
+        
+        # Rebase lại hoàn toàn theo tài liệu mẫu ACRCloud
+        import base64, hashlib, hmac, time, mimetypes, os, requests
+        host = os.getenv("ACR_CLOUD_HOST", getattr(settings, "ACR_CLOUD_HOST", ""))
+        access_key = os.getenv("ACR_CLOUD_ACCESS_KEY", getattr(settings, "ACR_CLOUD_ACCESS_KEY", ""))
+        access_secret = os.getenv("ACR_CLOUD_ACCESS_SECRET", getattr(settings, "ACR_CLOUD_ACCESS_SECRET", ""))
+        requrl = f"https://{host}/v1/identify"
+        http_method = "POST"
+        http_uri = "/v1/identify"
+        data_type = "audio"
+        signature_version = "1"
+        timestamp = str(int(time.time()))
+        string_to_sign = http_method + "\n" + http_uri + "\n" + access_key + "\n" + data_type + "\n" + signature_version + "\n" + timestamp
+        sign = base64.b64encode(hmac.new(access_secret.encode('utf-8'), string_to_sign.encode('utf-8'), digestmod=hashlib.sha1).digest()).decode('utf-8')
+        # Validate
+        if not host or not access_key or not access_secret:
+            return APIResponse(success=False, message="Missing ACRCloud credentials", data=None)
+        if not file_bytes or len(file_bytes) < 128:
+            return APIResponse(success=False, message="Audio file is empty or too small", data=None)
+        # Đặt tên file mặc định, đoán content-type
+        file_name = 'sample.mp4'
+        file_type, _ = mimetypes.guess_type(file_name)
+        if not file_type:
+            file_type = 'application/octet-stream'
+        files = [
+            ('sample', (file_name, file_bytes, file_type))
+        ]
+        data = {
+            'access_key': access_key,
+            'sample_bytes': len(file_bytes),
+            'timestamp': timestamp,
+            'signature': sign,
+            'data_type': data_type,
+            'signature_version': signature_version
+        }
+        try:
+            r = requests.post(requrl, files=files, data=data, timeout=15)
+            r.encoding = "utf-8"
+            result = r.json() if r.status_code == 200 else None
+            if result and result.get("status", {}).get("msg") == "Success":
+                music = result.get("metadata", {}).get("music", [{}])[0]
+                song_info = {
+                    "title": music.get("title"),
+                    "artist": ", ".join([a.get("name") for a in music.get("artists", [])]),
+                    "album": music.get("album", {}).get("name"),
+                    "release_date": music.get("release_date"),
+                    "score": music.get("score"),
+                    "external_ids": music.get("external_ids", {}),
+                    "external_metadata": music.get("external_metadata", {}),
+                }
+                return APIResponse(success=True, message="Song identified successfully", data=song_info)
+            else:
+                error_msg = result.get("status", {}).get("msg") if result else r.text
+                return APIResponse(success=False, message=f"Could not identify song: {error_msg}", data=result)
+        except Exception as e:
+            return APIResponse(success=False, message=f"Error: {str(e)}", data=None)
     
     def get_domain_url(self, request: Request) -> str:
         """Get domain URL automatically for production or development"""

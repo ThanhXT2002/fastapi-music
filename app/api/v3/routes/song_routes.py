@@ -5,9 +5,26 @@ from sqlalchemy.orm import Session
 from app.config.database import get_db
 from app.api.v3.schemas.song import SongInfoRequest, APIResponse
 from app.api.v3.controllers.song_controller import SongController
+import os
+from app.config.config import settings
+
+from fastapi import File, UploadFile
+import io
+
 
 router = APIRouter(prefix="/songs", tags=["Songs V3"])
 song_controller = SongController()
+
+
+# Endpoint nhận diện bài hát từ file upload
+
+# Endpoint nhận diện bài hát từ file upload sử dụng python-acrcloud
+@router.post("/identify", response_model=APIResponse)
+async def identify_song(file: UploadFile = File(...)):
+    file_bytes = await file.read()
+    return song_controller.identify_song_by_file(file_bytes)
+
+
 
 @router.post("/info", response_model=APIResponse)
 async def get_song_info(
