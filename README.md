@@ -29,30 +29,28 @@ python -m venv .venv
 
 # Cài đặt dependencies
 pip install -r requirements.txt
-# hoặc sử dụng uv (khuyến nghị)
+# hoặc dùng uv (khuyến nghị)
 uv install
 ```
 
 ### 2. Cấu hình môi trường
-Tạo file `.env` trong thư mục gốc:
+Tạo file `.env` trong thư mục gốc, ví dụ:
 ```env
-# Database
 DATABASE_URL=sqlite:///./fastapi_music.db
 # DATABASE_URL=postgresql://user:password@localhost/dbname
-
-# JWT Security
 SECRET_KEY=your-super-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Firebase Authentication
 FIREBASE_PROJECT_ID=your-firebase-project-id
 FIREBASE_SERVICE_ACCOUNT_KEY=./document/key-auth-google.json
-
-# Google OAuth (optional)
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_PROJECT_ID=your-google-project-id
+BASE_URL=http://localhost:8000
+UPLOAD_DIRECTORY=./uploads
+AUDIO_DIRECTORY=./uploads/audio
+THUMBNAIL_DIRECTORY=./uploads/thumbnails
+CLOUDINARY_CLOUD_NAME=your-cloudinary-name
+CLOUDINARY_API_KEY=your-cloudinary-key
+CLOUDINARY_API_SECRET=your-cloudinary-secret
+```
 
 # File Storage
 BASE_URL=http://localhost:8000
@@ -364,9 +362,7 @@ This project is licensed under the MIT License.
 
 ## 📞 Support
 
-- 📧 Email: [your-email@example.com]
-- 🐛 Issues: [GitHub Issues](link-to-issues)
-- 📖 Documentation: [API Docs](http://localhost:8000/docs)
+- 📧 Email: [tranxuanthanhtxt2002@gmail.com](mailto:tranxuanthanhtxt2002@gmail.com)
 
 ---
 
