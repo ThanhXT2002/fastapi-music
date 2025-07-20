@@ -1,1 +1,0 @@
-# JWT package initialization

@@ -1,1 +1,0 @@
-# RFC package initialization
