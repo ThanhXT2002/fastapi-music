@@ -18,8 +18,6 @@ try:
 except ImportError:
     print("V3 models not available")
 
-## Nếu cần admin panel, hãy copy module admin sang app_v3 và sửa import lại
-## from app_v3.config.admin import setup_admin
 
 # Create database tables
 try:
