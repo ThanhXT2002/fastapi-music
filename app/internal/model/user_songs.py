@@ -1,5 +1,5 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey
-from app_v3.config.database import Base
+from app.config.database import Base
 
 user_songs = Table(
     "user_songs",

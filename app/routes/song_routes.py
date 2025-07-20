@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app_v3.config.database import get_db
-from app_v3.schemas.song import SongInfoRequest, APIResponse
-from app_v3.controllers.song_controller import SongController
+from app.config.database import get_db
+from app.schemas.song import SongInfoRequest, APIResponse
+from app.controllers.song_controller import SongController
 import os
-from app_v3.config.config import settings
+from app.config.config import settings
 
 from fastapi import File, UploadFile
 import io

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
-from app_v3.controllers.auth import AuthController
-from app_v3.schemas.auth import GoogleTokenRequest, AuthResponse
+from app.controllers.auth import AuthController
+from app.schemas.auth import GoogleTokenRequest, AuthResponse
 
 router = APIRouter()
 

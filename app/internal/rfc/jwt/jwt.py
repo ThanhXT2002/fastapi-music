@@ -3,8 +3,8 @@ from typing import Optional, Dict, Any
 
 from jose import jwt, JWTError
 from pydantic import BaseModel
-from app_v3.config.config import settings
-from app_v3.internal.model.errors import TokenError
+from app.config.config import settings
+from app.internal.model.errors import TokenError
 
 class TokenPayload(BaseModel):
     sub: str

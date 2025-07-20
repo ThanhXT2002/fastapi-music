@@ -2,13 +2,13 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from app_v3.config.database import get_db
-from app_v3.config.config import settings
-from app_v3.internal.utils.helpers import verify_firebase_token
-from app_v3.internal.model.errors import GoogleAuthError, UserNotFoundError
-from app_v3.internal.storage.repositories.user import UserRepository
-from app_v3.internal.rfc.jwt.jwt import create_access_token
-from app_v3.schemas.auth import AuthResponse, TokenResponse, UserResponse
+from app.config.database import get_db
+from app.config.config import settings
+from app.internal.utils.helpers import verify_firebase_token
+from app.internal.model.errors import GoogleAuthError, UserNotFoundError
+from app.internal.storage.repositories.user import UserRepository
+from app.internal.rfc.jwt.jwt import create_access_token
+from app.schemas.auth import AuthResponse, TokenResponse, UserResponse
 
 class AuthController:
     def __init__(self, db: Session = Depends(get_db)):

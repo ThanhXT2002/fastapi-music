@@ -4,17 +4,17 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 from pathlib import Path
 
-from app_v3.routes.router import api_v3_router  # Import V3 router
-from app_v3.config.config import settings
-from app_v3.config.database import Base, engine, create_tables, get_database_info
+from app.routes.router import api_router  
+from app.config.config import settings
+from app.config.database import Base, engine, create_tables, get_database_info
 
-from app_v3.internal.model.user import User
-from app_v3.internal.model.song import Song
-from app_v3.internal.model.youtube_cache import YouTubeCache
+from app.internal.model.user import User
+from app.internal.model.song import Song
+from app.internal.model.youtube_cache import YouTubeCache
 
 # Import V3 models
 try:
-    from app_v3.models.song import SongV3
+    from app.models.song import SongV3
 except ImportError:
     print("V3 models not available")
 
@@ -57,7 +57,7 @@ except Exception as e:
 
 # Include API router
 # Include V3 API router
-app.include_router(api_v3_router, prefix="/api/v3")
+app.include_router(api_router, prefix="/api")
 
 # Mount static files for audio and thumbnails
 app.mount("/audio", StaticFiles(directory=settings.AUDIO_DIRECTORY), name="audio")

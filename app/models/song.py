@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Integer, DateTime, Text, Enum as SQLEnum, Index
 from datetime import datetime
 import enum
-from app_v3.config.database import Base
+from app.config.database import Base
 
 class ProcessingStatus(enum.Enum):
     PENDING = "pending"      # Đang chờ xử lý

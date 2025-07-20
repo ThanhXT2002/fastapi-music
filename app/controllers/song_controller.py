@@ -17,12 +17,12 @@ import hmac
 import time
 import requests
 
-from app_v3.models.song import SongV3, ProcessingStatus
-from app_v3.schemas.song import (
+from app.models.song import SongV3, ProcessingStatus
+from app.schemas.song import (
     SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse, CompletedSongsQueryParams
 )
-from app_v3.services.youtube_service import YouTubeService
-from app_v3.config.config import settings
+from app.services.youtube_service import YouTubeService
+from app.config.config import settings
 
 class SongController:
 

@@ -13,8 +13,8 @@ import uuid
 import requests
 from sqlalchemy.orm import Session
 
-from app_v3.models.song import SongV3, ProcessingStatus
-from app_v3.config.config import settings
+from app.models.song import SongV3, ProcessingStatus
+from app.config.config import settings
 
 class YouTubeService:
     def __init__(self):
