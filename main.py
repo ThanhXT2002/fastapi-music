@@ -8,15 +8,11 @@ from app.routes.router import api_router
 from app.config.config import settings
 from app.config.database import Base, engine, create_tables, get_database_info
 
-from app.internal.model.user import User
-from app.internal.model.song import Song
-from app.internal.model.youtube_cache import YouTubeCache
-
-# Import V3 models
+from app.models.user import User
 try:
-    from app.models.song import SongV3
+    from app.models.song import Song
 except ImportError:
-    print("V3 models not available")
+    print("models not available")
 
 
 # Create database tables
@@ -46,15 +42,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Setup Admin Panel
-try:
-    admin = setup_admin(app)
-    print("Admin panel setup successfully at /admin")
-except Exception as e:
-    print(f"Admin panel setup failed: {e}")
 
 # Include API router
-# Include V3 API router
 app.include_router(api_router, prefix="/api")
 
 # Mount static files for audio and thumbnails

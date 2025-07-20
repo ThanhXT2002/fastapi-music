@@ -9,8 +9,8 @@ class ProcessingStatus(enum.Enum):
     COMPLETED = "completed"   # Hoàn thành
     FAILED = "failed"         # Thất bại
 
-class SongV3(Base):
-    __tablename__ = "songs_v3"
+class Song(Base):
+    __tablename__ = "songs"
     
     id = Column(String(50), primary_key=True)  # YouTube video ID
     title = Column(String(500), nullable=False)
@@ -38,7 +38,7 @@ class SongV3(Base):
 
     # Indexes for better performance
     __table_args__ = (
-        Index('idx_songs_v3_status', 'status'),
-        Index('idx_songs_v3_created_at', 'created_at'),
-        Index('idx_songs_v3_status_completed_at', 'status', 'completed_at'),
+        Index('idx_songs_status', 'status'),
+        Index('idx_songs_created_at', 'created_at'),
+        Index('idx_songs_status_completed_at', 'status', 'completed_at'),
     )

@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from jose import jwt, JWTError
 from pydantic import BaseModel
 from app.config.config import settings
-from app.internal.model.errors import TokenError
+from app.models.errors import TokenError
 
 class TokenPayload(BaseModel):
     sub: str

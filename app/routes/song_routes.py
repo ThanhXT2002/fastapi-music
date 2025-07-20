@@ -12,7 +12,7 @@ from fastapi import File, UploadFile
 import io
 
 
-router = APIRouter(prefix="/songs", tags=["Songs V3"])
+router = APIRouter(prefix="/songs", tags=["Songs"])
 song_controller = SongController()
 
 

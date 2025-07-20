@@ -10,9 +10,9 @@ api_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 
 @api_router.get("/health")
 async def health_check():
-    """Health check endpoint for V3"""
+    """Health check endpoint for the API"""
     return {
         "success": True,
-        "message": "FastAPI Music V3 is running",
+        "message": "FastAPI Music is running",
         "version": "3.0.0"
     }

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from app.internal.model.user import User
-from app.internal.model.errors import UserNotFoundError
+from app.models.user import User
+from app.models.errors import UserNotFoundError
 from typing import Optional, Dict, Any
 
 class UserRepository:

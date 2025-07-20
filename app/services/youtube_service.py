@@ -13,7 +13,7 @@ import uuid
 import requests
 from sqlalchemy.orm import Session
 
-from app.models.song import SongV3, ProcessingStatus
+from app.models.song import Song, ProcessingStatus
 from app.config.config import settings
 
 class YouTubeService:
@@ -185,7 +185,7 @@ class YouTubeService:
         """Download audio and thumbnail files in background"""
         try:
             # Update status to processing
-            song = db.query(SongV3).filter(SongV3.id == song_id).first()
+            song = db.query(Song).filter(Song.id == song_id).first()
             if not song:
                 return False
             

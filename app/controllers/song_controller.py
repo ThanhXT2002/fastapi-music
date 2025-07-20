@@ -17,7 +17,7 @@ import hmac
 import time
 import requests
 
-from app.models.song import SongV3, ProcessingStatus
+from app.models.song import Song, ProcessingStatus
 from app.schemas.song import (
     SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse, CompletedSongsQueryParams
 )
@@ -172,7 +172,7 @@ class SongController:
             # Quick check if song already exists using video ID
             existing_song = None
             if video_id:
-                existing_song = db.query(SongV3).filter(SongV3.id == video_id).first()
+                existing_song = db.query(Song).filter(Song.id == video_id).first()
             
             # If song exists and is completed, return immediately
             if existing_song and existing_song.status == ProcessingStatus.COMPLETED:
@@ -203,7 +203,7 @@ class SongController:
             
             # Check again with the extracted video info ID (in case URL format was different)
             if not existing_song:
-                existing_song = db.query(SongV3).filter(SongV3.id == video_info['id']).first()
+                existing_song = db.query(Song).filter(Song.id == video_info['id']).first()
             
             if existing_song:
                 # Return existing song info
@@ -229,7 +229,7 @@ class SongController:
                     )
             else:
                 # Create new song record
-                new_song = SongV3(
+                new_song = Song(
                     id=video_info['id'],
                     title=video_info['title'],
                     artist=video_info['artist'],
@@ -278,7 +278,7 @@ class SongController:
         """
         Lấy trạng thái xử lý của bài hát
         """
-        song = db.query(SongV3).filter(SongV3.id == song_id).first()
+        song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
@@ -315,7 +315,7 @@ class SongController:
         Lấy file audio để phục vụ download
         """
         # Check if song exists and is completed
-        song = db.query(SongV3).filter(SongV3.id == song_id).first()
+        song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
@@ -375,7 +375,7 @@ class SongController:
         """
         Lấy file thumbnail để phục vụ hiển thị
         """
-        song = db.query(SongV3).filter(SongV3.id == song_id).first()
+        song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
@@ -424,9 +424,9 @@ class SongController:
                 limit = 1000
             
             # Base query với index optimization
-            query = db.query(SongV3).filter(
-                SongV3.status == ProcessingStatus.COMPLETED,
-                SongV3.audio_filename.isnot(None)
+            query = db.query(Song).filter(
+                Song.status == ProcessingStatus.COMPLETED,
+                Song.audio_filename.isnot(None)
             )
             
             if search_key:
@@ -437,20 +437,20 @@ class SongController:
                 # Quick database filter trước khi loop - search cả original và normalized
                 db_filtered = query.filter(
                     or_(
-                        SongV3.keywords.ilike(f'%{search_key_lower}%'),
-                        SongV3.title.ilike(f'%{search_key_lower}%'),
-                        SongV3.artist.ilike(f'%{search_key_lower}%'),
+                        Song.keywords.ilike(f'%{search_key_lower}%'),
+                        Song.title.ilike(f'%{search_key_lower}%'),
+                        Song.artist.ilike(f'%{search_key_lower}%'),
                         # THÊM: search với normalized text
-                        SongV3.keywords.ilike(f'%{search_key_normalized}%'),
-                        SongV3.title.ilike(f'%{search_key_normalized}%'),
-                        SongV3.artist.ilike(f'%{search_key_normalized}%')
+                        Song.keywords.ilike(f'%{search_key_normalized}%'),
+                        Song.title.ilike(f'%{search_key_normalized}%'),
+                        Song.artist.ilike(f'%{search_key_normalized}%')
                     )
-                ).order_by(SongV3.created_at.desc()).all()
+                ).order_by(Song.created_at.desc()).all()
                 
                 # DEBUG: Nếu database filter không có kết quả, bypass nó
                 if len(db_filtered) == 0:
                     # Fallback: Lấy tất cả songs và filter bằng algorithm
-                    all_songs = query.order_by(SongV3.created_at.desc()).all()
+                    all_songs = query.order_by(Song.created_at.desc()).all()
                     filtered_songs = self._filter_songs_by_fuzzy_keywords(all_songs, search_key)
                     completed_songs = filtered_songs[:limit]
                 elif len(db_filtered) <= limit * 2:
@@ -459,12 +459,12 @@ class SongController:
                     completed_songs = filtered_songs[:limit]
                 else:
                     # Nếu quá nhiều, lấy tất cả rồi filter
-                    all_songs = query.order_by(SongV3.created_at.desc()).all()
+                    all_songs = query.order_by(Song.created_at.desc()).all()
                     filtered_songs = self._filter_songs_by_fuzzy_keywords(all_songs, search_key)
                     completed_songs = filtered_songs[:limit]
             else:
                 # Không có search key - query trực tiếp với limit
-                completed_songs = query.order_by(SongV3.created_at.desc()).limit(limit).all()
+                completed_songs = query.order_by(Song.created_at.desc()).limit(limit).all()
             
             # Build response nhanh nhất có thể
             songs_data = []
@@ -472,8 +472,8 @@ class SongController:
             
             for song in completed_songs:
                 # Pre-compute URLs
-                audio_url = f"{base_url}/api/v3/songs/download/{song.id}"
-                thumbnail_url = f"{base_url}/api/v3/songs/thumbnail/{song.id}"
+                audio_url = f"{base_url}/api/songs/download/{song.id}"
+                thumbnail_url = f"{base_url}/api/songs/thumbnail/{song.id}"
                 
                 # Quick keyword parsing
                 keywords = [k.strip() for k in song.keywords.split(',') if k.strip()] if song.keywords else []
