@@ -70,6 +70,9 @@ class YTMusicService:
     def get_lyrics(self, song_id):
         return yt.get_lyrics(song_id)
 
+    def get_related_songs(self, browseId):
+        return yt.get_song_related(browseId)
+
     def get_top_songs(self, limit=25, country='ZZ'):
         charts = yt.get_charts(country=country)
         # Kiểm tra dữ liệu trả về

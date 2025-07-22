@@ -4,6 +4,11 @@ from fastapi import HTTPException
 yt_service = YTMusicService()
 
 class YTMusicController:
+    def get_related_songs(self, browseId):
+        try:
+            return yt_service.get_related_songs(browseId)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
     def stream_audio(self, song_id):
         try:

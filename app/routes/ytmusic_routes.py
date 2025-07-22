@@ -1,5 +1,3 @@
-
-
 from fastapi import APIRouter, Query
 from app.controllers.ytmusic_controller import YTMusicController
 
@@ -84,6 +82,15 @@ def get_lyrics(song_id: str):
     Trả về: dict lyrics, source, hasTimestamps
     """
     return controller.get_lyrics(song_id)
+
+@router.get("/related/{browseId}")
+def get_related_songs(browseId: str):
+    """
+    Lấy các nội dung liên quan đến bài hát (playlist, nghệ sĩ, bài hát tương tự...)
+    - browseId: id duyệt bài hát/playlist trên YouTube Music
+    Trả về: list các nội dung liên quan
+    """
+    return controller.get_related_songs(browseId)
 
 
 
