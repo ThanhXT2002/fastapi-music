@@ -44,7 +44,7 @@ def get_song(song_id: str):
     """
     return controller.get_song(song_id)
 
-@router.get("/playlist-with-related/{song_id}")
+@router.get("/playlist-with-song/{song_id}")
 def get_playlist_with_song(song_id: str):
     """
     Lấy watch playlist và các nội dung liên quan đến bài hát
