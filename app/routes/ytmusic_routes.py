@@ -1,3 +1,4 @@
+
 from fastapi import APIRouter, Query
 from app.controllers.ytmusic_controller import YTMusicController
 
@@ -42,6 +43,15 @@ def get_song(song_id: str):
     Trả về: dict thông tin bài hát
     """
     return controller.get_song(song_id)
+
+@router.get("/playlist-with-related/{song_id}")
+def get_playlist_with_song(song_id: str):
+    """
+    Lấy watch playlist và các nội dung liên quan đến bài hát
+    - song_id: id bài hát/video trên YouTube Music
+    Trả về: dict { watch, related }
+    """
+    return controller.get_playlist_with_song(song_id)
 
 
 @router.get("/album/{album_id}")

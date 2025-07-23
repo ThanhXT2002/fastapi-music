@@ -41,17 +41,18 @@ class YTMusicService:
             return top_result + artists + community_playlists + songs_null_category
         return results
 
-    def get_song(self, song_id):
-        result = yt.get_song(song_id)
-        watch = yt.get_watch_playlist(song_id)
-        related_browseId = watch["related"] 
 
-        # Lấy các nội dung liên quan đến bài hát
-        related = yt.get_song_related(related_browseId)
-        print("Related songs:", related)
+    def get_song(self, song_id):
+        return yt.get_song(song_id)
+
+    def get_playlist_with_song(self, song_id):
+        # Lấy watch playlist và các nội dung liên quan đến bài hát
+        watch = yt.get_watch_playlist(song_id)
+        related_browseId = watch.get("related")
+        related = yt.get_song_related(related_browseId) if related_browseId else None
         return {
-        "song": result,
-        "related": related
+            "watch": watch,
+            "related": related
         }
 
     def get_album(self, album_id):

@@ -56,3 +56,10 @@ class YTMusicController:
             return yt_service.get_top_songs(limit=limit, country=country)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+    def get_playlist_with_song(self, song_id: str):
+        try:
+            return yt_service.get_playlist_with_song(song_id)
+        except Exception as e:
+            # Có thể mở rộng để trả về các mã lỗi khác nhau tùy loại lỗi
+            raise HTTPException(status_code=500, detail=str(e))
