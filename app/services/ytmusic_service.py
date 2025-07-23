@@ -43,20 +43,16 @@ class YTMusicService:
 
     def get_song(self, song_id):
         result = yt.get_song(song_id)
-        audio_url = None
-        formats = result.get("streamingData", {}).get("adaptiveFormats", [])
-        # Ưu tiên itag 140 (audio/mp4), nếu không có thì lấy audio đầu tiên
-        audio_formats = [f for f in formats if f.get("mimeType", "").startswith("audio/")]
-        best_audio = next((f for f in audio_formats if f.get("itag") == 140), None) or (audio_formats[0] if audio_formats else None)
-        if best_audio:
-            if "url" in best_audio:
-                audio_url = best_audio["url"]
-            elif "signatureCipher" in best_audio:
-                from urllib.parse import parse_qs, unquote
-                params = parse_qs(best_audio["signatureCipher"])
-                audio_url = unquote(params["url"][0])
-        result["audio_url"] = audio_url
-        return result
+        watch = yt.get_watch_playlist(song_id)
+        related_browseId = watch["related"] 
+
+        # Lấy các nội dung liên quan đến bài hát
+        related = yt.get_song_related(related_browseId)
+        print("Related songs:", related)
+        return {
+        "song": result,
+        "related": related
+        }
 
     def get_album(self, album_id):
         return yt.get_album(album_id)
