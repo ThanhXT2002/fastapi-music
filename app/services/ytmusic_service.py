@@ -1,12 +1,9 @@
-import requests
-from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from ytmusicapi import YTMusic
 
 yt = YTMusic()
 
 class YTMusicService:
-
     def stream_audio(self, song_id):
         import subprocess
         youtube_url = f"https://www.youtube.com/watch?v={song_id}"
@@ -74,3 +71,8 @@ class YTMusicService:
         if not items or not isinstance(items, list) or len(items) == 0:
             return {"error": "Không có dữ liệu top songs cho quốc gia này"}
         return items[:limit]
+    
+    def get_search_suggestions(self, query):
+        return yt.get_search_suggestions(query)
+    
+    

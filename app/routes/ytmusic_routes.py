@@ -113,3 +113,12 @@ def get_top_songs(limit: int = Query(25), country: str = Query('ZZ')):
     Trả về: list dict bài hát thịnh hành hoặc thông báo lỗi nếu không có dữ liệu
     """
     return controller.get_top_songs(limit=limit, country=country)
+
+@router.get("/search-suggestions")
+def get_search_suggestions(query: str):
+    """
+    Lấy gợi ý tìm kiếm dựa trên query.
+    - query: từ khóa tìm kiếm
+    Trả về: list các gợi ý tìm kiếm
+    """
+    return controller.get_search_suggestions(query)

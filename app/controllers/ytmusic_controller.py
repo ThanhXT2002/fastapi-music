@@ -4,6 +4,13 @@ from fastapi import HTTPException
 yt_service = YTMusicService()
 
 class YTMusicController:
+
+    def get_search_suggestions(self, query):
+        try:
+            return yt_service.get_search_suggestions(query)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
     def get_related_songs(self, browseId):
         try:
             return yt_service.get_related_songs(browseId)
@@ -63,3 +70,5 @@ class YTMusicController:
         except Exception as e:
             # Có thể mở rộng để trả về các mã lỗi khác nhau tùy loại lỗi
             raise HTTPException(status_code=500, detail=str(e))
+        
+    
