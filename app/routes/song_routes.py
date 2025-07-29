@@ -55,6 +55,7 @@ def get_song_status(
 @router.get("/download/{song_id}")
 async def download_song(
     song_id: str,
+    request: Request,
     download: bool = Query(default=False, description="True để download file, False để streaming"),
     db: Session = Depends(get_db)
 ):
@@ -63,23 +64,16 @@ async def download_song(
     - download=false (mặc định): Streaming trực tiếp cho HTML5 audio
     - download=true: Download file về máy
     """
-    # Sử dụng controller để lấy thông tin file
     file_data = await song_controller.get_audio_file(song_id, db)
-    
-    # Chọn Content-Disposition dựa trên parameter
     disposition = "attachment" if download else "inline"
-    
-    # Return streaming response
-    return StreamingResponse(
-        song_controller.file_streamer(file_data["file_path"]),
-        media_type='audio/mpeg',
-        headers={
-            'Content-Disposition': f'{disposition}; filename="{file_data["safe_filename"]}"',
-            'Content-Length': str(file_data["file_size"]),
-            'Accept-Ranges': 'bytes',
-            'Cache-Control': 'public, max-age=3600'
-        }
+    # Gọi hàm hỗ trợ HTTP Range
+    response = await song_controller.stream_file_with_range(
+        request,
+        str(file_data["file_path"])
     )
+    # Thêm Content-Disposition vào headers
+    response.headers["Content-Disposition"] = f'{disposition}; filename=\"{file_data["safe_filename"]}\"'
+    return response
 
 @router.get("/thumbnail/{song_id}")
 async def get_thumbnail(

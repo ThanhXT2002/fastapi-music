@@ -11,11 +11,15 @@ import re
 import unicodedata
 from unidecode import unidecode
 
+from fastapi.responses import StreamingResponse
+import os
+
 import base64
 import hashlib
 import hmac
 import time
 import requests
+import  mimetypes
 
 from app.models.song import Song, ProcessingStatus
 from app.schemas.song import (
@@ -36,7 +40,6 @@ class SongController:
         """
         
         # Rebase lại hoàn toàn theo tài liệu mẫu ACRCloud
-        import base64, hashlib, hmac, time, mimetypes, os, requests
         host = os.getenv("ACR_CLOUD_HOST", getattr(settings, "ACR_CLOUD_HOST", ""))
         access_key = os.getenv("ACR_CLOUD_ACCESS_KEY", getattr(settings, "ACR_CLOUD_ACCESS_KEY", ""))
         access_secret = os.getenv("ACR_CLOUD_ACCESS_SECRET", getattr(settings, "ACR_CLOUD_ACCESS_SECRET", ""))
@@ -405,7 +408,7 @@ class SongController:
             "safe_filename": f"{safe_filename}{file_ext}"
         }
     
-    async def file_streamer(self, file_path: Path, chunk_size: int = 8192) -> AsyncGenerator[bytes, None]:
+    async def file_streamer(self, file_path: Path, chunk_size: int = 262144) -> AsyncGenerator[bytes, None]:
         """Helper method to stream files"""
         async with aiofiles.open(file_path, 'rb') as file:
             while chunk := await file.read(chunk_size):
@@ -604,4 +607,40 @@ class SongController:
                             return 18 * multiplier
         
         return 0
-    
+
+
+    async def stream_file_with_range(self, request: Request, file_path: str, chunk_size: int = 262144):
+        file_size = os.path.getsize(file_path)
+        range_header = request.headers.get('range')
+        start = 0
+        end = file_size - 1
+
+        if range_header:
+            # Parse header: "bytes=START-END"
+            bytes_range = range_header.replace("bytes=", "").split("-")
+            if bytes_range[0]:
+                start = int(bytes_range[0])
+            if len(bytes_range) > 1 and bytes_range[1]:
+                end = int(bytes_range[1])
+            if start > end or end >= file_size:
+                raise HTTPException(status_code=416, detail="Requested Range Not Satisfiable")
+
+        async def file_iterator():
+            with open(file_path, "rb") as f:
+                f.seek(start)
+                bytes_to_read = end - start + 1
+                while bytes_to_read > 0:
+                    chunk = f.read(min(chunk_size, bytes_to_read))
+                    if not chunk:
+                        break
+                    yield chunk
+                    bytes_to_read -= len(chunk)
+
+        headers = {
+            "Content-Range": f"bytes {start}-{end}/{file_size}",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(end - start + 1),
+            "Cache-Control": "public, max-age=3600"
+        }
+        status_code = 206 if range_header else 200
+        return StreamingResponse(file_iterator(), status_code=status_code, headers=headers, media_type="audio/mpeg")
