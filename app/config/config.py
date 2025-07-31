@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 import os
 from dotenv import load_dotenv
 
@@ -27,5 +27,6 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "musicadmin")
     ADMIN_PASSWORD_HASH: str = os.getenv("ADMIN_PASSWORD_HASH", "")
     ADMIN_SECRET_KEY: str = os.getenv("ADMIN_SECRET_KEY", "your-very-secure-admin-secret-key-change-this")
+    ALLOW_ORIGINS: List[str] = []
 
 settings = Settings()

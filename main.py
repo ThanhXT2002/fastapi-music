@@ -36,7 +36,7 @@ app = FastAPI(
 # Set up CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with actual origins
+    allow_origins=settings.ALLOW_ORIGINS,  # Lấy từ file .env
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
