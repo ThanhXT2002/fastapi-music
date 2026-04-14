@@ -1,0 +1,26 @@
+services:
+  api:
+    build:
+      # Lấy toàn bộ mã nguồn bên ngoài thư mục docker làm cơ sở
+      context: ../
+      # Lệnh cho docker biết file cấu hình nằm ở đây
+      dockerfile: docker/Dockerfile
+      
+    container_name: fastapi-music-dev
+    ports:
+      - "8000:8000"
+      
+    volumes:
+      # QUAN TRỌNG NHẤT: Bê toàn bộ thư mục code (ở Windows) ánh xạ thẳng vào thư mục /app (ở Linux)
+      - ../:/app
+      
+      # Ngoại trừ 2 thành phần này (để tránh tụi nó ghi đè làm rác và làm crash hệ thống Linux)
+      - /app/.venv
+      - /app/ffmpeg
+      
+    environment:
+      # Để log Python hiển thị ra màu và ngay lập tức
+      - PYTHONUNBUFFERED=1
+      
+    # Chạy Server và Bật chế độ --reload (Hot-reload) để sửa Code bên ngoài tự nhận vào trong
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload

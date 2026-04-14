@@ -1,0 +1,27 @@
+# Git
+.git/
+.gitignore
+
+# Môi trường ảo Python
+.venv/
+venv/
+env/
+
+# Files rác sinh ra bởi Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Cấu hình môi trường (Bảo mật)
+.env
+docker/docker-compose.yml
+
+# Thư mục ứng dụng của Windows (Ngăn chặn chép exe lạc lõng)
+ffmpeg/bin/
+
+# Database nội bộ và Files Media (Tránh copy nặng vào image nếu lỡ gọi Build)
+fastapi_music.db
+uploads/audio/*
+uploads/thumbnails/*
