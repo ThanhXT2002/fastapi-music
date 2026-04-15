@@ -196,17 +196,14 @@ class YouTubeService:
             timestamp = int(time.time())
             
             def _download_audio():
-                # Configure yt-dlp for audio download
+                # Configure yt-dlp for audio download (NO postprocessor — convert manually)
                 output_path = self.audio_dir / f"{song_id}_{timestamp}"  # No extension
                 
                 ydl_opts = {
                     'format': 'bestaudio/best',
-                    'outtmpl': str(output_path),  # yt-dlp will add extension automatically
-                    'postprocessors': [{
-                        'key': 'FFmpegExtractAudio',
-                        'preferredcodec': 'm4a',
-                        'preferredquality': '192',
-                    }],
+                    'outtmpl': str(output_path),
+                    # Không dùng FFmpegExtractAudio postprocessor vì dễ fail
+                    # Thay vào đó convert thủ công bằng ffmpeg subprocess
                     'quiet': True,
                     'no_warnings': True,
                     'user_agent': random.choice(self.user_agents),
@@ -222,48 +219,62 @@ class YouTubeService:
                     'socket_timeout': 60,
                     'retries': 3,
                     'nocheckcertificate': True,
-                    'extractaudio': True,
-                    'audioformat': 'm4a',
-                    'audioquality': '192K',
                 }
                 
                 # Add delay to avoid rate limiting
                 time.sleep(random.uniform(1, 3))
                 
-                # Download with yt-dlp
+                # Download raw audio with yt-dlp
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
                 
-                # Find the actual downloaded file - could be with or without extension
-                actual_file = None
-                
-                # Check for files with this pattern
+                # Find the raw downloaded file
+                raw_file = None
                 for file in self.audio_dir.glob(f"{song_id}_{timestamp}*"):
-                    if file.is_file():
-                        # Prefer files with audio extensions
-                        if file.suffix.lower() in ['.m4a', '.mp4', '.webm', '.mp3']:
-                            actual_file = file
-                            break
-                        # But also accept files without extensions (yt-dlp sometimes does this)
-                        elif not actual_file:
-                            actual_file = file
+                    if file.is_file() and file.stat().st_size > 1024:
+                        raw_file = file
+                        break
                 
-                if actual_file and actual_file.exists():
-                    # Verify file size
-                    file_size = actual_file.stat().st_size
-                    if file_size < 1024:  # Less than 1KB
-                        actual_file.unlink()
-                        return None
+                if not raw_file:
+                    return None
+                
+                # Convert to .m4a using ffmpeg subprocess
+                final_file = self.audio_dir / f"{song_id}_{timestamp}.m4a"
+                
+                try:
+                    import subprocess
+                    result = subprocess.run(
+                        ['ffmpeg', '-i', str(raw_file), '-c', 'copy', '-y', str(final_file)],
+                        capture_output=True, timeout=120
+                    )
                     
-                    # If file doesn't have .m4a extension, rename it
-                    if actual_file.suffix.lower() != '.m4a':
-                        final_file = actual_file.with_suffix('.m4a')
-                        if final_file.exists():
-                            final_file.unlink()  # Remove existing file if it exists
-                        actual_file.rename(final_file)
-                        actual_file = final_file
-                    
-                    return actual_file.name
+                    if result.returncode == 0 and final_file.exists() and final_file.stat().st_size > 1024:
+                        # Convert thành công → xóa raw file nếu khác final file
+                        if raw_file != final_file and raw_file.exists():
+                            raw_file.unlink()
+                        return final_file.name
+                    else:
+                        # Convert fail, nhưng raw file vẫn có thể dùng được
+                        # Rename raw file → .m4a (browser vẫn phát được AAC raw)
+                        if raw_file.suffix.lower() != '.m4a':
+                            renamed = raw_file.with_suffix('.m4a')
+                            if renamed.exists():
+                                renamed.unlink()
+                            raw_file.rename(renamed)
+                            return renamed.name
+                        return raw_file.name
+                        
+                except Exception as e:
+                    print(f"FFmpeg convert error: {e}")
+                    # Fallback: dùng raw file
+                    if raw_file and raw_file.exists():
+                        if raw_file.suffix.lower() != '.m4a':
+                            renamed = raw_file.with_suffix('.m4a')
+                            if renamed.exists():
+                                renamed.unlink()
+                            raw_file.rename(renamed)
+                            return renamed.name
+                        return raw_file.name
                 
                 return None
             

@@ -16,7 +16,13 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Ưu tiên copy file yêu cầu và cài đặt thư viện trước để tối ưu tốc độ Build ở các lần sau
+# Mặc dù ở Dev chúng ta xài code qua volume, nhưng vẫn copy code vào image làm khung nền
+# Cài đặt git và nodejs (yt-dlp CẦN NodeJS để giải mã signature của YouTube, tránh lỗi 403 Forbidden)
+RUN apt-get update && \
+    apt-get install -y nodejs && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

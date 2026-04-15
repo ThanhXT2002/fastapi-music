@@ -75,17 +75,42 @@ async def download_song(
     response.headers["Content-Disposition"] = f'{disposition}; filename=\"{file_data["safe_filename"]}\"'
     return response
 
+@router.get("/proxy-download/{song_id}")
+async def proxy_download(
+    song_id: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Proxy download audio từ YouTube về FE ngay lập tức.
+    - Nếu file đã có trên server (completed) → serve từ disk
+    - Nếu chưa → proxy trực tiếp từ YouTube, không cần chờ BE xử lý xong
+    """
+    return await song_controller.proxy_download_audio(song_id, request, db)
+
+
 @router.get("/thumbnail/{song_id}")
 async def get_thumbnail(
     song_id: str,
     db: Session = Depends(get_db)
 ):
     """
-    Lấy thumbnail đã tải về
+    Lấy thumbnail đã tải về hoặc proxy từ YouTube
     """
-    # Sử dụng controller để lấy thông tin thumbnail
     thumbnail_data = await song_controller.get_thumbnail_file(song_id, db)
     
+    # Proxy từ YouTube (chưa có file trên server)
+    if thumbnail_data.get("proxy"):
+        return Response(
+            content=thumbnail_data["content"],
+            media_type=thumbnail_data["media_type"],
+            headers={
+                'Content-Disposition': f'inline; filename="{thumbnail_data["safe_filename"]}"',
+                'Cache-Control': 'public, max-age=3600'
+            }
+        )
+    
+    # File đã có trên server
     return StreamingResponse(
         song_controller.file_streamer(thumbnail_data["file_path"]),
         media_type=thumbnail_data["media_type"],

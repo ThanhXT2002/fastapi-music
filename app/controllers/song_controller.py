@@ -20,6 +20,8 @@ import hmac
 import time
 import requests
 import  mimetypes
+import random
+import yt_dlp
 
 from app.models.song import Song, ProcessingStatus
 from app.schemas.song import (
@@ -376,37 +378,66 @@ class SongController:
     
     async def get_thumbnail_file(self, song_id: str, db: Session):
         """
-        Lấy file thumbnail để phục vụ hiển thị
+        Lấy file thumbnail để phục vụ hiển thị.
+        Nếu file chưa có trên server → proxy từ YouTube URL.
         """
         song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
         
-        if not song.thumbnail_filename:
-            raise HTTPException(status_code=404, detail="Thumbnail not available")
+        # Trường hợp 1: File thumbnail đã có trên server
+        if song.thumbnail_filename:
+            file_path = Path(settings.THUMBNAIL_DIRECTORY) / song.thumbnail_filename
+            
+            if file_path.exists():
+                # Determine media type
+                media_type = "image/jpeg"
+                if file_path.suffix.lower() in ['.png']:
+                    media_type = "image/png"
+                elif file_path.suffix.lower() in ['.webp']:
+                    media_type = "image/webp"
+                
+                safe_filename = self.sanitize_filename(song.title)
+                file_ext = file_path.suffix
+                
+                return {
+                    "file_path": file_path,
+                    "media_type": media_type,
+                    "safe_filename": f"{safe_filename}{file_ext}",
+                    "proxy": False
+                }
         
-        file_path = Path(settings.THUMBNAIL_DIRECTORY) / song.thumbnail_filename
+        # Trường hợp 2: Chưa có file → proxy từ YouTube URL
+        if song.thumbnail_url and song.thumbnail_url.startswith('http'):
+            try:
+                user_agent = random.choice([
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                ])
+                headers = {
+                    'User-Agent': user_agent,
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                }
+                loop = asyncio.get_event_loop()
+                response = await loop.run_in_executor(
+                    None,
+                    lambda: requests.get(song.thumbnail_url, headers=headers, timeout=15)
+                )
+                response.raise_for_status()
+                
+                content_type = response.headers.get('Content-Type', 'image/jpeg')
+                
+                return {
+                    "proxy": True,
+                    "content": response.content,
+                    "media_type": content_type,
+                    "safe_filename": f"{song_id}.webp"
+                }
+            except Exception as e:
+                print(f"Error proxying thumbnail: {e}")
         
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Thumbnail file not found")
-        
-        # Determine media type
-        media_type = "image/jpeg"
-        if file_path.suffix.lower() in ['.png']:
-            media_type = "image/png"
-        elif file_path.suffix.lower() in ['.webp']:
-            media_type = "image/webp"
-        
-        # Sanitize the title for the Content-Disposition header
-        safe_filename = self.sanitize_filename(song.title)
-        file_ext = file_path.suffix
-        
-        return {
-            "file_path": file_path,
-            "media_type": media_type,
-            "safe_filename": f"{safe_filename}{file_ext}"
-        }
+        raise HTTPException(status_code=404, detail="Thumbnail not available")
     
     async def file_streamer(self, file_path: Path, chunk_size: int = 262144) -> AsyncGenerator[bytes, None]:
         """Helper method to stream files"""
@@ -607,6 +638,65 @@ class SongController:
                             return 18 * multiplier
         
         return 0
+
+
+    async def proxy_download_audio(self, song_id: str, request: Request, db: Session):
+        """
+        Long-poll download: chờ background task xong → stream file về FE ngay.
+        
+        Flow:
+        1. Nếu song đã COMPLETED + file tồn tại → serve từ disk ngay (cache hit)
+        2. Nếu chưa → poll DB mỗi 2s chờ background task hoàn thành → serve file
+        
+        Lợi ích: FE chỉ cần 1 HTTP request duy nhất, không cần polling riêng.
+        FE nhận blob audio hoàn chỉnh (.m4a đã qua FFmpeg), lưu vào IndexedDB.
+        
+        KHÔNG tự gọi yt-dlp vì sẽ gây dual download → YouTube chặn bot.
+        """
+        song = db.query(Song).filter(Song.id == song_id).first()
+        
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+        
+        # Cache hit: file đã có → serve ngay
+        if song.status == ProcessingStatus.COMPLETED and song.audio_filename:
+            audio_dir = Path(settings.AUDIO_DIRECTORY)
+            file_path = audio_dir / song.audio_filename
+            
+            if file_path.exists() and file_path.stat().st_size > 1024:
+                return await self.stream_file_with_range(request, str(file_path))
+        
+        # Chờ background task hoàn thành (max 180s = 3 phút)
+        MAX_WAIT_SECONDS = 180
+        POLL_INTERVAL = 2  # seconds
+        waited = 0
+        
+        while waited < MAX_WAIT_SECONDS:
+            await asyncio.sleep(POLL_INTERVAL)
+            waited += POLL_INTERVAL
+            
+            # Refresh song data từ DB
+            db.expire(song)
+            db.refresh(song)
+            
+            if song.status == ProcessingStatus.COMPLETED and song.audio_filename:
+                audio_dir = Path(settings.AUDIO_DIRECTORY)
+                file_path = audio_dir / song.audio_filename
+                
+                if file_path.exists() and file_path.stat().st_size > 1024:
+                    return await self.stream_file_with_range(request, str(file_path))
+            
+            elif song.status == ProcessingStatus.FAILED:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Download thất bại: {song.error_message or 'Lỗi không xác định'}"
+                )
+        
+        # Timeout
+        raise HTTPException(
+            status_code=504,
+            detail="Timeout: background task chưa hoàn thành sau 3 phút"
+        )
 
 
     async def stream_file_with_range(self, request: Request, file_path: str, chunk_size: int = 262144):
