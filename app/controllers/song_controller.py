@@ -1,47 +1,80 @@
+"""Controller xu ly toan bo nghiep vu lien quan den bai hat.
+
+Module nay chua:
+- SongController: nhan dien bai hat (ACRCloud), lay thong tin YouTube,
+  download/streaming audio, proxy thumbnail, tim kiem fuzzy.
+
+Lien quan:
+- Route:   app/routes/song_routes.py
+- Service: app/services/youtube_service.py
+- Model:   app/models/song.py
+- Schema:  app/schemas/song.py
+"""
+
+# ── Standard library imports ──────────────────────────────
 import asyncio
-from datetime import datetime
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
-from fastapi import HTTPException, BackgroundTasks, Request
-from typing import Optional, AsyncGenerator
-import os
-from pathlib import Path
-import aiofiles
-import re
-import unicodedata
-from unidecode import unidecode
-
-from fastapi.responses import StreamingResponse
-import os
-
 import base64
 import hashlib
 import hmac
-import time
-import requests
-import  mimetypes
+import mimetypes
+import os
 import random
-import yt_dlp
+import re
+import time
+import unicodedata
+from datetime import datetime
+from pathlib import Path
+from typing import AsyncGenerator
 
+# ── Third-party imports ───────────────────────────────────
+import aiofiles
+import httpx
+import yt_dlp
+from fastapi import HTTPException, BackgroundTasks, Request
+from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
+from sqlalchemy.orm import Session
+from unidecode import unidecode
+
+# ── Internal imports ──────────────────────────────────────
 from app.models.song import Song, ProcessingStatus
 from app.schemas.song import (
-    SongInfoResponse, StatusResponse, APIResponse, CompletedSongResponse, CompletedSongsListResponse, CompletedSongsQueryParams
+    SongInfoResponse, StatusResponse, APIResponse,
+    CompletedSongResponse, CompletedSongsListResponse,
+    CompletedSongsQueryParams,
 )
 from app.services.youtube_service import YouTubeService
 from app.config.config import settings
 
+
 class SongController:
+    """Controller xu ly cac thao tac voi bai hat.
+
+    Chiu trach nhiem:
+        - Nhan dien bai hat tu file audio qua ACRCloud.
+        - Lay thong tin va bat dau download tu YouTube.
+        - Streaming/download file audio da xu ly.
+        - Proxy thumbnail tu YouTube hoac tu disk.
+        - Tim kiem fuzzy bai hat da hoan thanh.
+        - Long-poll download cho co che proxy.
+    """
 
     def __init__(self):
         self.youtube_service = YouTubeService()
         
         
     def identify_song_by_file(self, file_bytes: bytes) -> APIResponse:
+        """Nhan dien bai hat tu file audio qua ACRCloud HTTP API.
+
+        Gui file audio len ACRCloud de fingerprint matching,
+        tra ve metadata bai hat (title, artist, album...).
+
+        Args:
+            file_bytes: Noi dung file audio dang bytes.
+
+        Returns:
+            APIResponse chua thong tin bai hat hoac thong bao loi.
         """
-        Identify song by file using direct HTTP API integration with ACRCloud.
-        """
-        
-        # Rebase lại hoàn toàn theo tài liệu mẫu ACRCloud
         host = os.getenv("ACR_CLOUD_HOST", getattr(settings, "ACR_CLOUD_HOST", ""))
         access_key = os.getenv("ACR_CLOUD_ACCESS_KEY", getattr(settings, "ACR_CLOUD_ACCESS_KEY", ""))
         access_secret = os.getenv("ACR_CLOUD_ACCESS_SECRET", getattr(settings, "ACR_CLOUD_ACCESS_SECRET", ""))
@@ -53,12 +86,12 @@ class SongController:
         timestamp = str(int(time.time()))
         string_to_sign = http_method + "\n" + http_uri + "\n" + access_key + "\n" + data_type + "\n" + signature_version + "\n" + timestamp
         sign = base64.b64encode(hmac.new(access_secret.encode('utf-8'), string_to_sign.encode('utf-8'), digestmod=hashlib.sha1).digest()).decode('utf-8')
-        # Validate
+
         if not host or not access_key or not access_secret:
             return APIResponse(success=False, message="Missing ACRCloud credentials", data=None)
         if not file_bytes or len(file_bytes) < 128:
             return APIResponse(success=False, message="Audio file is empty or too small", data=None)
-        # Đặt tên file mặc định, đoán content-type
+
         file_name = 'sample.mp4'
         file_type, _ = mimetypes.guess_type(file_name)
         if not file_type:
@@ -75,7 +108,7 @@ class SongController:
             'signature_version': signature_version
         }
         try:
-            r = requests.post(requrl, files=files, data=data, timeout=15)
+            r = httpx.post(requrl, files=files, data=data, timeout=15)
             r.encoding = "utf-8"
             result = r.json() if r.status_code == 200 else None
             if result and result.get("status", {}).get("msg") == "Success":
@@ -97,89 +130,113 @@ class SongController:
             return APIResponse(success=False, message=f"Error: {str(e)}", data=None)
     
     def get_domain_url(self, request: Request) -> str:
-        """Get domain URL automatically for production or development"""
+        """Xac dinh domain URL tu request headers.
+
+        Uu tien doc proxy headers (ngrok, cloudflare, nginx),
+        roi fallback ve request.base_url, cuoi cung la settings.
+
+        Args:
+            request: FastAPI Request object.
+
+        Returns:
+            Base URL dang "https://domain.com" (khong trailing slash).
+        """
         try:
-            # Check for proxy headers (ngrok, cloudflare, nginx)
             forwarded_proto = request.headers.get('x-forwarded-proto')
             forwarded_host = request.headers.get('x-forwarded-host')
-            
+
             if forwarded_proto and forwarded_host:
                 return f"{forwarded_proto}://{forwarded_host}"
-            
-            # Check for standard proxy headers
+
             host = request.headers.get('host')
             if host:
-                # Check if HTTPS
-                if 'https' in str(request.url) or request.headers.get('x-forwarded-proto') == 'https':
+                if (
+                    'https' in str(request.url)
+                    or request.headers.get('x-forwarded-proto') == 'https'
+                ):
                     return f"https://{host}"
                 else:
                     return f"http://{host}"
-            
-            # Fallback to request base URL
+
             base_url = str(request.base_url).rstrip('/')
             return base_url
-        except:
-            # Last resort fallback
+        except Exception:
             return settings.BASE_URL
     
     def sanitize_filename(self, filename: str) -> str:
+        """Lam sach ten file de dung trong Content-Disposition header.
+
+        Loai bo emoji, ky tu non-ASCII, va cac ky tu dac biet
+        khong hop le trong ten file.
+
+        Args:
+            filename: Ten file goc (co the chua Unicode).
+
+        Returns:
+            Ten file da lam sach, chi chua ky tu ASCII hop le.
         """
-        Sanitize a filename to be used in Content-Disposition header:
-        - Remove emojis and non-ASCII characters
-        - Replace with ASCII approximations when possible
-        - Remove/replace special characters
-        """
-        # NFKD normalization to separate characters from combining marks
         filename = unicodedata.normalize('NFKD', filename)
-        # Remove remaining non-ASCII characters
         filename = re.sub(r'[^\x00-\x7F]+', '', filename)
-        # Replace problematic characters with underscores
         filename = re.sub(r'[\\/:*?"<>|]', '_', filename)
-        # Remove leading/trailing whitespace and dots
         filename = filename.strip('. ')
-        # Ensure we have a valid filename
         if not filename:
             filename = "audio_file"
         return filename
     
     def normalize_vietnamese_text(self, text: str) -> str:
-        """
-        Normalize Vietnamese text using unidecode for perfect diacritics removal:
-        - "hưng" → "hung"
-        - "không lời" → "khong loi"  
-        - "nhạc" → "nhac"
+        """Chuan hoa van ban tieng Viet bang bo dau qua unidecode.
+
+        Vi du:
+            - "hung" -> "hung"
+            - "khong loi" -> "khong loi"
+            - "nhac" -> "nhac"
+
+        Args:
+            text: Chuoi can chuan hoa.
+
+        Returns:
+            Chuoi da bo dau, lowercase, da trim khoang trang.
         """
         if not text:
             return ""
-        
-        # Convert to lowercase first
         text = text.lower()
-        
-        # Use unidecode for perfect Vietnamese → ASCII conversion
         normalized = unidecode(text)
-        
-        # Remove extra spaces and return
         return re.sub(r'\s+', ' ', normalized).strip()
     
     async def get_song_info(
-        self, 
-        youtube_url: str, 
-        db: Session, 
-        background_tasks: BackgroundTasks
+        self,
+        youtube_url: str,
+        db: Session,
+        background_tasks: BackgroundTasks,
     ) -> APIResponse:
-        """
-        Lấy thông tin bài hát và bắt đầu quá trình tải về
+        """Lay thong tin bai hat va bat dau download trong background.
+
+        Flow xu ly:
+            1. Trich xuat video ID tu URL.
+            2. Kiem tra ban ghi da ton tai trong DB.
+            3. Neu song da COMPLETED -> tra ve ngay.
+            4. Neu chua -> lay metadata tu YouTube, tao ban ghi,
+               khoi dong background task download.
+
+        Args:
+            youtube_url: URL YouTube hop le.
+            db: Database session.
+            background_tasks: FastAPI background task runner.
+
+        Returns:
+            APIResponse chua metadata bai hat.
+
+        Raises:
+            HTTPException 400: URL khong hop le hoac loi YouTube.
         """
         try:
-            # First, try to extract video ID quickly without full video info
             video_id = self.youtube_service.extract_video_id(youtube_url)
             
-            # Quick check if song already exists using video ID
             existing_song = None
             if video_id:
                 existing_song = db.query(Song).filter(Song.id == video_id).first()
             
-            # If song exists and is completed, return immediately
+
             if existing_song and existing_song.status == ProcessingStatus.COMPLETED:
                 response_data = SongInfoResponse(
                     id=existing_song.id,
@@ -196,22 +253,18 @@ class SongController:
                 return APIResponse(
                     success=True,
                     message="Song already available",
-                    data=response_data.dict()
+                    data=response_data.model_dump()
                 )
             
-            # If not found or not completed, get full video info
-            # Use quick_check=True if this is for an existing song check
             video_info = await self.youtube_service.get_video_info(
                 youtube_url, 
                 quick_check=(existing_song is not None)
             )
             
-            # Check again with the extracted video info ID (in case URL format was different)
             if not existing_song:
                 existing_song = db.query(Song).filter(Song.id == video_info['id']).first()
             
             if existing_song:
-                # Return existing song info
                 response_data = SongInfoResponse(
                     id=existing_song.id,
                     title=existing_song.title,
@@ -224,7 +277,7 @@ class SongController:
                     created_at=existing_song.created_at
                 )
                 
-                # If not completed, restart download process
+                # Chua hoan thanh -> restart download
                 if existing_song.status != ProcessingStatus.COMPLETED:
                     background_tasks.add_task(
                         self.youtube_service.download_audio_and_thumbnail,
@@ -233,7 +286,6 @@ class SongController:
                         db
                     )
             else:
-                # Create new song record
                 new_song = Song(
                     id=video_info['id'],
                     title=video_info['title'],
@@ -262,7 +314,7 @@ class SongController:
                     created_at=new_song.created_at
                 )
                 
-                # Start background download
+
                 background_tasks.add_task(
                     self.youtube_service.download_audio_and_thumbnail,
                     new_song.id,
@@ -273,27 +325,36 @@ class SongController:
             return APIResponse(
                 success=True,
                 message="get info video success",
-                data=response_data.dict()
+                data=response_data.model_dump()
             )
             
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to get video info: {str(e)}")
     
     def get_song_status(self, song_id: str, db: Session) -> APIResponse:
-        """
-        Lấy trạng thái xử lý của bài hát
+        """Lay trang thai xu ly hien tai cua bai hat.
+
+        Args:
+            song_id: YouTube video ID.
+            db: Database session.
+
+        Returns:
+            APIResponse chua trang thai va progress.
+
+        Raises:
+            HTTPException 404: Bai hat khong ton tai.
         """
         song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
         
-        # Calculate progress
         progress = None
         if song.status == ProcessingStatus.PENDING:
             progress = 0.0
         elif song.status == ProcessingStatus.PROCESSING:
-            progress = 0.5  # Giả sử 50% khi đang xử lý
+            # Uoc luong 50% vi khong co progress chi tiet tu yt-dlp
+            progress = 0.5
         elif song.status == ProcessingStatus.COMPLETED:
             progress = 1.0
         elif song.status == ProcessingStatus.FAILED:
@@ -312,14 +373,26 @@ class SongController:
         return APIResponse(
             success=True,
             message="Status retrieved successfully",
-            data=status_data.dict()
+            data=status_data.model_dump()
         )
         
     async def get_audio_file(self, song_id: str, db: Session):
+        """Lay duong dan file audio da download de phuc vu streaming.
+
+        Thu nhieu pattern tim file: ten chinh xac tu DB,
+        them .m4a extension, glob theo song_id.
+
+        Args:
+            song_id: YouTube video ID.
+            db: Database session.
+
+        Returns:
+            Dict chua file_path, file_size, safe_filename.
+
+        Raises:
+            HTTPException 400: Bai hat chua hoan thanh.
+            HTTPException 404: Bai hat hoac file khong ton tai.
         """
-        Lấy file audio để phục vụ download
-        """
-        # Check if song exists and is completed
         song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
@@ -334,27 +407,23 @@ class SongController:
         if not song.audio_filename:
             raise HTTPException(status_code=404, detail="Audio file not found")
         
-        # Try different file path patterns
         audio_dir = Path(settings.AUDIO_DIRECTORY)
         possible_paths = []
-        
-        # 1. Exact filename from database
+
         possible_paths.append(audio_dir / song.audio_filename)
-        
-        # 2. Add .m4a extension if not present
+
         if not song.audio_filename.endswith('.m4a'):
             possible_paths.append(audio_dir / f"{song.audio_filename}.m4a")
-        
-        # 3. Try pattern matching for files starting with song_id
+
         for audio_file in audio_dir.glob(f"{song_id}_*.m4a"):
             if audio_file.is_file():
                 possible_paths.append(audio_file)
-        
-        # 4. Try without extension if current has extension
+
         if song.audio_filename.endswith('.m4a'):
-            possible_paths.append(audio_dir / song.audio_filename.replace('.m4a', ''))
-        
-        # Find the first existing file
+            possible_paths.append(
+                audio_dir / song.audio_filename.replace('.m4a', '')
+            )
+
         file_path = None
         for path in possible_paths:
             if path.exists() and path.is_file():
@@ -364,10 +433,7 @@ class SongController:
         if not file_path:
             raise HTTPException(status_code=404, detail="Audio file not found on server")
         
-        # Get file size
         file_size = file_path.stat().st_size
-        
-        # Sanitize the title for the Content-Disposition header
         safe_filename = self.sanitize_filename(song.title)
         
         return {
@@ -377,21 +443,33 @@ class SongController:
         }
     
     async def get_thumbnail_file(self, song_id: str, db: Session):
-        """
-        Lấy file thumbnail để phục vụ hiển thị.
-        Nếu file chưa có trên server → proxy từ YouTube URL.
+        """Lay file thumbnail tu disk hoac proxy tu YouTube.
+
+        Uu tien file da download tren server. Neu chua co
+        thi proxy truc tiep tu thumbnail_url goc.
+
+        Args:
+            song_id: YouTube video ID.
+            db: Database session.
+
+        Returns:
+            Dict chua file_path/content, media_type, safe_filename.
+
+        Raises:
+            HTTPException 404: Khong co thumbnail.
         """
         song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
         
-        # Trường hợp 1: File thumbnail đã có trên server
         if song.thumbnail_filename:
-            file_path = Path(settings.THUMBNAIL_DIRECTORY) / song.thumbnail_filename
-            
+            file_path = (
+                Path(settings.THUMBNAIL_DIRECTORY)
+                / song.thumbnail_filename
+            )
+
             if file_path.exists():
-                # Determine media type
                 media_type = "image/jpeg"
                 if file_path.suffix.lower() in ['.png']:
                     media_type = "image/png"
@@ -408,7 +486,7 @@ class SongController:
                     "proxy": False
                 }
         
-        # Trường hợp 2: Chưa có file → proxy từ YouTube URL
+        # Chua co file tren disk -> proxy tu YouTube URL goc
         if song.thumbnail_url and song.thumbnail_url.startswith('http'):
             try:
                 user_agent = random.choice([
@@ -419,15 +497,14 @@ class SongController:
                     'User-Agent': user_agent,
                     'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
                 }
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: requests.get(song.thumbnail_url, headers=headers, timeout=15)
-                )
-                response.raise_for_status()
-                
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        song.thumbnail_url, headers=headers, timeout=15
+                    )
+                    response.raise_for_status()
+
                 content_type = response.headers.get('Content-Type', 'image/jpeg')
-                
+
                 return {
                     "proxy": True,
                     "content": response.content,
@@ -439,77 +516,110 @@ class SongController:
         
         raise HTTPException(status_code=404, detail="Thumbnail not available")
     
-    async def file_streamer(self, file_path: Path, chunk_size: int = 262144) -> AsyncGenerator[bytes, None]:
-        """Helper method to stream files"""
+    async def file_streamer(
+        self, file_path: Path, chunk_size: int = 262144
+    ) -> AsyncGenerator[bytes, None]:
+        """Stream file theo tung chunk (async generator).
+
+        Args:
+            file_path: Duong dan file can stream.
+            chunk_size: Kich thuoc moi chunk (bytes). Mac dinh 256KB.
+
+        Yields:
+            Tung chunk bytes cua file.
+        """
         async with aiofiles.open(file_path, 'rb') as file:
             while chunk := await file.read(chunk_size):
                 yield chunk
     
-    async def get_completed_songs(self, db: Session, limit: int = 100, request: Request = None, search_key: str = None) -> APIResponse:
-        """
-        Lấy tất cả bài hát đã hoàn thành với URL streaming
-        OPTIMIZED: Tối ưu tốc độ cho database lớn
+    async def get_completed_songs(
+        self,
+        db: Session,
+        limit: int = 100,
+        request: Request = None,
+        search_key: str | None = None,
+    ) -> APIResponse:
+        """Lay danh sach bai hat da hoan thanh kem URL streaming.
+
+        Ho tro tim kiem fuzzy theo title, artist, keywords voi
+        co che: DB ILIKE truoc -> fallback sang in-memory fuzzy.
+
+        Args:
+            db: Database session.
+            limit: So luong bai hat toi da. Mac dinh 100.
+            request: HTTP request (de tao base URL cho streaming).
+            search_key: Tu khoa tim kiem (nullable, fuzzy matching).
+
+        Returns:
+            APIResponse chua danh sach bai hat da hoan thanh.
+
+        Raises:
+            HTTPException 500: Loi truy van database.
         """
         try:
-            # Validate limit
             if not isinstance(limit, int) or limit < 1:
                 limit = 100
             elif limit > 1000:
                 limit = 1000
-            
-            # Base query với index optimization
+
             query = db.query(Song).filter(
                 Song.status == ProcessingStatus.COMPLETED,
                 Song.audio_filename.isnot(None)
             )
             
             if search_key:
-                # Tối ưu: Thử database search trước nếu có thể
                 search_key_lower = search_key.lower().strip()
-                search_key_normalized = unidecode(search_key_lower)  # Add normalized version
-                
-                # Quick database filter trước khi loop - search cả original và normalized
+                search_key_normalized = unidecode(search_key_lower)
+
+                # DB ILIKE truoc — nhanh hon in-memory voi dataset lon
                 db_filtered = query.filter(
                     or_(
                         Song.keywords.ilike(f'%{search_key_lower}%'),
                         Song.title.ilike(f'%{search_key_lower}%'),
                         Song.artist.ilike(f'%{search_key_lower}%'),
-                        # THÊM: search với normalized text
                         Song.keywords.ilike(f'%{search_key_normalized}%'),
                         Song.title.ilike(f'%{search_key_normalized}%'),
-                        Song.artist.ilike(f'%{search_key_normalized}%')
+                        Song.artist.ilike(f'%{search_key_normalized}%'),
                     )
                 ).order_by(Song.created_at.desc()).all()
                 
-                # DEBUG: Nếu database filter không có kết quả, bypass nó
+                # Fallback: DB khong match -> in-memory fuzzy
                 if len(db_filtered) == 0:
-                    # Fallback: Lấy tất cả songs và filter bằng algorithm
-                    all_songs = query.order_by(Song.created_at.desc()).all()
-                    filtered_songs = self._filter_songs_by_fuzzy_keywords(all_songs, search_key)
+                    all_songs = query.order_by(
+                        Song.created_at.desc()
+                    ).all()
+                    filtered_songs = self._filter_songs_by_fuzzy_keywords(
+                        all_songs, search_key
+                    )
                     completed_songs = filtered_songs[:limit]
                 elif len(db_filtered) <= limit * 2:
-                    # Apply scoring và limit
-                    filtered_songs = self._filter_songs_by_fuzzy_keywords(db_filtered, search_key)
+                    filtered_songs = self._filter_songs_by_fuzzy_keywords(
+                        db_filtered, search_key
+                    )
                     completed_songs = filtered_songs[:limit]
                 else:
-                    # Nếu quá nhiều, lấy tất cả rồi filter
-                    all_songs = query.order_by(Song.created_at.desc()).all()
-                    filtered_songs = self._filter_songs_by_fuzzy_keywords(all_songs, search_key)
+                    all_songs = query.order_by(
+                        Song.created_at.desc()
+                    ).all()
+                    filtered_songs = self._filter_songs_by_fuzzy_keywords(
+                        all_songs, search_key
+                    )
                     completed_songs = filtered_songs[:limit]
             else:
-                # Không có search key - query trực tiếp với limit
-                completed_songs = query.order_by(Song.created_at.desc()).limit(limit).all()
+                completed_songs = query.order_by(
+                    Song.created_at.desc()
+                ).limit(limit).all()
             
-            # Build response nhanh nhất có thể
             songs_data = []
-            base_url = self.get_domain_url(request) if request else settings.BASE_URL
-            
+            base_url = (
+                self.get_domain_url(request)
+                if request else settings.BASE_URL
+            )
+
             for song in completed_songs:
-                # Pre-compute URLs
                 audio_url = f"{base_url}/api/songs/download/{song.id}"
                 thumbnail_url = f"{base_url}/api/songs/thumbnail/{song.id}"
-                
-                # Quick keyword parsing
+
                 keywords = [k.strip() for k in song.keywords.split(',') if k.strip()] if song.keywords else []
                 
                 song_data = CompletedSongResponse(
@@ -533,132 +643,156 @@ class SongController:
             return APIResponse(
                 success=True,
                 message=f"Retrieved {len(songs_data)} completed songs{search_info} (limit: {limit})",
-                data=response_data.dict()
+                data=response_data.model_dump()
             )
             
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to get completed songs: {str(e)}")
     
     def _filter_songs_by_fuzzy_keywords(self, songs, search_key: str):
-        """
-        ULTRA OPTIMIZED: Fast search với unidecode + simplified algorithm
-        Target: <100ms cho 5000 bài hát
+        """Tim kiem fuzzy in-memory voi unidecode normalization.
+
+        Kiem tra keywords -> title -> artist theo do uu tien
+        giam dan. Toi uu cho <100ms voi ~5000 bai hat.
+
+        Args:
+            songs: Danh sach Song objects can filter.
+            search_key: Tu khoa tim kiem.
+
+        Returns:
+            Danh sach Song da sap xep theo relevance score.
         """
         if not search_key:
             return songs
             
-        # Pre-normalize search key một lần
         search_lower = search_key.lower().strip()
         search_normalized = unidecode(search_lower)
         search_words = search_normalized.split()
         
-        # DEBUG: Print để kiểm tra
-        print(f"🔍 Search: '{search_key}' → '{search_lower}' → '{search_normalized}'")
-        print(f"📊 Total songs to check: {len(songs)}")
-        
         matched_songs = []
-        
+
         for song in songs:
             score = 0
-            
-            # 1. Quick Keywords check (highest priority)
+
             if song.keywords:
                 keywords_norm = unidecode(song.keywords.lower())
-                keyword_score = self._quick_field_score(search_lower, search_normalized, search_words, 
-                                               song.keywords.lower(), keywords_norm, multiplier=3)
+                keyword_score = self._quick_field_score(
+                    search_lower, search_normalized, search_words,
+                    song.keywords.lower(), keywords_norm, multiplier=3
+                )
                 score += keyword_score
-                
-                # DEBUG: Log nếu có match trong keywords
-                if keyword_score > 0:
-                    print(f"🎯 KEYWORD MATCH: '{song.title}' - Keywords: '{song.keywords}' → Normalized: '{keywords_norm}' - Score: {keyword_score}")
-            
-            # 2. Title check (nếu chưa đủ điểm)
+
             if score < 80 and song.title:
                 title_norm = unidecode(song.title.lower())
-                title_score = self._quick_field_score(search_lower, search_normalized, search_words,
-                                               song.title.lower(), title_norm, multiplier=2)
+                title_score = self._quick_field_score(
+                    search_lower, search_normalized, search_words,
+                    song.title.lower(), title_norm, multiplier=2
+                )
                 score += title_score
-                
-                # DEBUG: Log nếu có match trong title
-                if title_score > 0:
-                    print(f"📝 TITLE MATCH: '{song.title}' → Normalized: '{title_norm}' - Score: {title_score}")
-            
-            # 3. Artist check (chỉ khi cần thiết)
+
             if score < 40 and song.artist:
                 artist_norm = unidecode(song.artist.lower())
-                artist_score = self._quick_field_score(search_lower, search_normalized, search_words,
-                                               song.artist.lower(), artist_norm, multiplier=1)
+                artist_score = self._quick_field_score(
+                    search_lower, search_normalized, search_words,
+                    song.artist.lower(), artist_norm, multiplier=1
+                )
                 score += artist_score
-                
-                # DEBUG: Log nếu có match trong artist
-                if artist_score > 0:
-                    print(f"👤 ARTIST MATCH: '{song.artist}' → Normalized: '{artist_norm}' - Score: {artist_score}")
-            
-            # Add nếu có score
+
             if score > 0:
                 matched_songs.append((song, score))
-                print(f"✅ TOTAL MATCH: '{song.title}' - Total Score: {score}")
-        
-        # Quick sort và return
+
         matched_songs.sort(key=lambda x: x[1], reverse=True)
-        print(f"🏆 Final matches: {len(matched_songs)}")
         
         return [song for song, _ in matched_songs]
     
-    def _quick_field_score(self, search_orig, search_norm, search_words, field_orig, field_norm, multiplier=1):
+    def _quick_field_score(
+        self, search_orig: str, search_norm: str,
+        search_words: list[str], field_orig: str,
+        field_norm: str, multiplier: int = 1,
+    ) -> int:
+        """Tinh diem relevance giua search term va mot truong.
+
+        So sanh theo thu tu uu tien giam dan:
+        exact match > substring > reverse substring > word match > prefix/suffix.
+
+        Args:
+            search_orig: Tu khoa goc (lowercase).
+            search_norm: Tu khoa da unidecode.
+            search_words: Danh sach tung tu da unidecode.
+            field_orig: Gia tri truong goc (lowercase).
+            field_norm: Gia tri truong da unidecode.
+            multiplier: He so nhan diem (keywords=3, title=2, artist=1).
+
+        Returns:
+            Diem relevance (cao = phu hop hon).
         """
-        Simplified scoring function - tối ưu tốc độ
-        """
-        # 1. Exact match (original hoặc normalized)
         if search_orig == field_orig or search_norm == field_norm:
             return 50 * multiplier
-        
-        # 2. Substring (original hoặc normalized)
+
         if search_orig in field_orig or search_norm in field_norm:
             return 35 * multiplier
-            
-        # 3. Reverse substring
+
         if field_orig in search_orig or field_norm in search_norm:
             return 25 * multiplier
-        
-        # 4. Word matching (chỉ với normalized)
-        if any(word in field_norm for word in search_words if len(word) >= 2):
+
+        if any(
+            word in field_norm
+            for word in search_words if len(word) >= 2
+        ):
             return 15 * multiplier
-            
-        # 5. Prefix/suffix matching (simplified)
+
         for word in search_words:
             if len(word) >= 3:
                 for field_word in field_norm.split():
                     if len(field_word) >= 3:
-                        # Prefix: "tik" in "tiktok"
-                        if field_word.startswith(word) and len(word) >= len(field_word) * 0.6:
+                        if (
+                            field_word.startswith(word)
+                            and len(word) >= len(field_word) * 0.6
+                        ):
                             return 20 * multiplier
-                        # Suffix: "tok" in "tiktok"  
-                        if field_word.endswith(word) and len(word) >= len(field_word) * 0.6:
+                        if (
+                            field_word.endswith(word)
+                            and len(word) >= len(field_word) * 0.6
+                        ):
                             return 18 * multiplier
         
         return 0
 
 
-    async def proxy_download_audio(self, song_id: str, request: Request, db: Session):
-        """
-        Long-poll download: chờ background task xong → stream file về FE ngay.
-        
-        Flow:
-        1. Nếu song đã COMPLETED + file tồn tại → serve từ disk ngay (cache hit)
-        2. Nếu chưa → poll DB mỗi 2s chờ background task hoàn thành → serve file
-        
-        Lợi ích: FE chỉ cần 1 HTTP request duy nhất, không cần polling riêng.
-        FE nhận blob audio hoàn chỉnh (.m4a đã qua FFmpeg), lưu vào IndexedDB.
-        
-        KHÔNG tự gọi yt-dlp vì sẽ gây dual download → YouTube chặn bot.
+    async def proxy_download_audio(
+        self, song_id: str, request: Request, db: Session
+    ):
+        """Long-poll download: cho background task xong roi stream ve FE.
+
+        Flow xu ly:
+            1. Neu song da COMPLETED va file ton tai -> serve tu disk.
+            2. Neu chua -> poll DB moi 2s cho background task hoan thanh.
+            3. Timeout sau 3 phut (180s).
+
+        Loi ich: FE chi can 1 HTTP request duy nhat, nhan blob audio
+        hoan chinh (.m4a da qua FFmpeg), luu vao IndexedDB.
+
+        Khong tu goi yt-dlp vi se gay dual download -> YouTube chan bot.
+
+        Args:
+            song_id: YouTube video ID.
+            request: HTTP request.
+            db: Database session.
+
+        Returns:
+            StreamingResponse audio.
+
+        Raises:
+            HTTPException 404: Bai hat khong ton tai.
+            HTTPException 502: Download that bai.
+            HTTPException 504: Timeout sau 3 phut.
         """
         song = db.query(Song).filter(Song.id == song_id).first()
         
         if not song:
             raise HTTPException(status_code=404, detail="Song not found")
         
-        # Cache hit: file đã có → serve ngay
+
         if song.status == ProcessingStatus.COMPLETED and song.audio_filename:
             audio_dir = Path(settings.AUDIO_DIRECTORY)
             file_path = audio_dir / song.audio_filename
@@ -666,16 +800,15 @@ class SongController:
             if file_path.exists() and file_path.stat().st_size > 1024:
                 return await self.stream_file_with_range(request, str(file_path))
         
-        # Chờ background task hoàn thành (max 180s = 3 phút)
         MAX_WAIT_SECONDS = 180
-        POLL_INTERVAL = 2  # seconds
+        POLL_INTERVAL = 2
         waited = 0
         
         while waited < MAX_WAIT_SECONDS:
             await asyncio.sleep(POLL_INTERVAL)
             waited += POLL_INTERVAL
             
-            # Refresh song data từ DB
+
             db.expire(song)
             db.refresh(song)
             
@@ -692,21 +825,40 @@ class SongController:
                     detail=f"Download thất bại: {song.error_message or 'Lỗi không xác định'}"
                 )
         
-        # Timeout
+
         raise HTTPException(
             status_code=504,
             detail="Timeout: background task chưa hoàn thành sau 3 phút"
         )
 
 
-    async def stream_file_with_range(self, request: Request, file_path: str, chunk_size: int = 262144):
+    async def stream_file_with_range(
+        self, request: Request, file_path: str,
+        chunk_size: int = 262144,
+    ):
+        """Stream file voi ho tro HTTP Range request.
+
+        Ho tro partial content (206) cho HTML5 audio seeking.
+        Neu khong co Range header, tra ve toan bo file (200).
+
+        Args:
+            request: HTTP request (doc Range header).
+            file_path: Duong dan file tren disk.
+            chunk_size: Kich thuoc moi chunk. Mac dinh 256KB.
+
+        Returns:
+            StreamingResponse voi Content-Range header.
+
+        Raises:
+            HTTPException 416: Range khong hop le.
+        """
         file_size = os.path.getsize(file_path)
         range_header = request.headers.get('range')
         start = 0
         end = file_size - 1
 
         if range_header:
-            # Parse header: "bytes=START-END"
+
             bytes_range = range_header.replace("bytes=", "").split("-")
             if bytes_range[0]:
                 start = int(bytes_range[0])

@@ -1,124 +1,239 @@
+"""Route tuong tac voi YouTube Music API.
 
-from fastapi import APIRouter, Query
+Module nay chua:
+- Endpoint streaming audio truc tiep tu YouTube.
+- Endpoint tim kiem bai hat, album, playlist, nghe si.
+- Endpoint lay metadata: loi bai hat, bai lien quan, top charts.
+- Endpoint goi y tim kiem.
+
+Lien quan:
+- Controller: app/controllers/ytmusic_controller.py
+- Service:    app/services/ytmusic_service.py
+"""
+
+# ── Standard library imports ──────────────────────────────
+from typing import Annotated
+
+# ── Third-party imports ───────────────────────────────────
+from fastapi import APIRouter, Depends, Query
+
+# ── Internal imports ──────────────────────────────────────
 from app.controllers.ytmusic_controller import YTMusicController
 
+
+# ── Router / Dependencies ─────────────────────────────────
+
 router = APIRouter(prefix="/ytmusic", tags=["ytmusic"])
-controller = YTMusicController()
+
+
+def get_ytmusic_controller() -> YTMusicController:
+    """Tao instance YTMusicController cho moi request."""
+    return YTMusicController()
+
+
+YTMusicControllerDep = Annotated[
+    YTMusicController, Depends(get_ytmusic_controller)
+]
+
+
+# ── Endpoints ─────────────────────────────────────────────
 
 @router.get("/stream/{song_id}")
-def stream_audio(song_id: str):
-    """
-    Proxy stream audio cho FE từ song_id (trả về audio/mp4)
-    - song_id: id bài hát/video trên YouTube Music
-    Trả về: StreamingResponse audio/mp4
+def stream_audio(
+    song_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Stream audio truc tiep tu YouTube qua yt-dlp pipe.
+
+    Audio duoc pipe truc tiep tu YouTube, khong luu file tren server.
+
+    Args:
+        song_id: YouTube video ID.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        StreamingResponse voi media_type audio/mp4.
     """
     return controller.stream_audio(song_id)
 
 
 @router.get("/search")
-def search(query: str = Query(...), filter: str = Query(None), limit: int = Query(20)):
-    """
-    Tìm kiếm bài hát, album, playlist, nghệ sĩ trên YouTube Music.
-    - query: từ khóa tìm kiếm
-    - filter: loại kết quả, chấp nhận các giá trị:
-        'songs' (bài hát),
-        'videos' (video),
-        'albums' (album),
-        'artists' (nghệ sĩ),
-        'playlists' (playlist),
-        'community_playlists' (playlist cộng đồng),
-        'featured_playlists' (playlist nổi bật),
-        'uploads' (bài hát đã upload, cần xác thực)
-    - limit: số lượng kết quả trả về
-    Trả về: list các dict bài hát/album/playlist/nghệ sĩ
+def search(
+    controller: YTMusicControllerDep,
+    query: Annotated[str, Query()],
+    filter: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query()] = 20,
+):
+    """Tim kiem bai hat, album, playlist, nghe si tren YouTube Music.
+
+    Khi filter=None, ket qua duoc gom nhom va sap xep theo
+    thu tu uu tien de hien thi phu hop tren frontend.
+
+    Args:
+        controller: Controller xu ly nghiep vu.
+        query: Tu khoa tim kiem.
+        filter: Bo loc loai ket qua (songs, videos, albums,
+            artists, playlists...). None de lay tat ca.
+        limit: So luong ket qua toi da. Mac dinh 20.
+
+    Returns:
+        Danh sach ket qua tim kiem tu YouTube Music API.
     """
     return controller.search(query, filter, limit)
 
 
 @router.get("/song/{song_id}")
-def get_song(song_id: str):
-    """
-    Lấy thông tin chi tiết một bài hát (metadata, streamingData, videoDetails...)
-    - song_id: id bài hát/video trên YouTube Music
-    Trả về: dict thông tin bài hát
+def get_song(
+    song_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay thong tin chi tiet mot bai hat.
+
+    Args:
+        song_id: YouTube video ID.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Dict chua metadata bai hat (title, artists, thumbnails...).
     """
     return controller.get_song(song_id)
 
+
 @router.get("/playlist-with-song/{song_id}")
-def get_playlist_with_song(song_id: str):
-    """
-    Lấy watch playlist và các nội dung liên quan đến bài hát
-    - song_id: id bài hát/video trên YouTube Music
-    Trả về: dict { watch, related }
+def get_playlist_with_song(
+    song_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay watch playlist (danh sach phat tiep) tu mot bai hat.
+
+    Args:
+        song_id: YouTube video ID lam diem bat dau.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Dict chua danh sach bai hat se phat tiep theo.
     """
     return controller.get_playlist_with_song(song_id)
 
 
 @router.get("/album/{album_id}")
-def get_album(album_id: str):
-    """
-    Lấy thông tin album và danh sách bài hát trong album
-    - album_id: id album trên YouTube Music
-    Trả về: dict thông tin album, list bài hát
+def get_album(
+    album_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay thong tin chi tiet album va danh sach bai hat.
+
+    Args:
+        album_id: YouTube Music album ID hoac browse ID.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Dict chua metadata album va danh sach bai hat.
     """
     return controller.get_album(album_id)
 
 
 @router.get("/playlist/{playlist_id}")
-def get_playlist(playlist_id: str):
-    """
-    Lấy thông tin playlist và danh sách bài hát trong playlist
-    - playlist_id: id playlist trên YouTube Music
-    Trả về: dict thông tin playlist, list bài hát
+def get_playlist(
+    playlist_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay thong tin chi tiet playlist va danh sach bai hat.
+
+    Args:
+        playlist_id: YouTube Music playlist ID.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Dict chua metadata playlist va danh sach bai hat.
     """
     return controller.get_playlist(playlist_id)
 
 
 @router.get("/artist/{artist_id}")
-def get_artist(artist_id: str):
-    """
-    Lấy thông tin nghệ sĩ, các album, bài hát, video nổi bật
-    - artist_id: id kênh nghệ sĩ trên YouTube Music
-    Trả về: dict thông tin nghệ sĩ, list album, list bài hát
+def get_artist(
+    artist_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay thong tin chi tiet nghe si va cac noi dung noi bat.
+
+    Args:
+        artist_id: YouTube Music artist channel ID.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Dict chua metadata nghe si, albums, singles, videos.
     """
     return controller.get_artist(artist_id)
 
 
 @router.get("/song/{song_id}/lyrics")
-def get_lyrics(song_id: str):
-    """
-    Lấy lyrics của bài hát
-    - song_id: id bài hát/video trên YouTube Music
-    Trả về: dict lyrics, source, hasTimestamps
+def get_lyrics(
+    song_id: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay loi bai hat.
+
+    Args:
+        song_id: YouTube video ID.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Dict chua loi bai hat, nguon cung cap, va timestamps.
     """
     return controller.get_lyrics(song_id)
 
+
 @router.get("/related/{browseId}")
-def get_related_songs(browseId: str):
-    """
-    Lấy các nội dung liên quan đến bài hát (playlist, nghệ sĩ, bài hát tương tự...)
-    - browseId: id duyệt bài hát/playlist trên YouTube Music
-    Trả về: list các nội dung liên quan
+def get_related_songs(
+    browseId: str,
+    controller: YTMusicControllerDep,
+):
+    """Lay danh sach noi dung lien quan den bai hat.
+
+    Args:
+        browseId: Browse ID cua phan related (lay tu get_song).
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Danh sach bai hat, playlist, nghe si lien quan.
     """
     return controller.get_related_songs(browseId)
 
 
-
 @router.get("/top-songs")
-def get_top_songs(limit: int = Query(25), country: str = Query('ZZ')):
-    """
-    Lấy danh sách các bài hát thịnh hành (top songs) theo quốc gia
-    - limit: số lượng bài hát trả về
-    - country: mã quốc gia (ZZ: toàn cầu, VN: Việt Nam, US: Mỹ...)
-    Trả về: list dict bài hát thịnh hành hoặc thông báo lỗi nếu không có dữ liệu
+def get_top_songs(
+    controller: YTMusicControllerDep,
+    limit: Annotated[int, Query()] = 25,
+    country: Annotated[str, Query()] = 'ZZ',
+):
+    """Lay danh sach bai hat thinh hanh theo quoc gia.
+
+    Args:
+        controller: Controller xu ly nghiep vu.
+        limit: So bai hat toi da. Mac dinh 25.
+        country: Ma quoc gia ISO 3166-1 alpha-2.
+            Mac dinh "ZZ" (global charts).
+
+    Returns:
+        Danh sach bai hat top charts, hoac dict loi
+        neu khong co du lieu.
     """
     return controller.get_top_songs(limit=limit, country=country)
 
+
 @router.get("/search-suggestions")
-def get_search_suggestions(query: str):
-    """
-    Lấy gợi ý tìm kiếm dựa trên query.
-    - query: từ khóa tìm kiếm
-    Trả về: list các gợi ý tìm kiếm
+def get_search_suggestions(
+    query: Annotated[str, Query()],
+    controller: YTMusicControllerDep,
+):
+    """Lay goi y tim kiem tu YouTube Music.
+
+    Args:
+        query: Chuoi tim kiem hien tai cua nguoi dung.
+        controller: Controller xu ly nghiep vu.
+
+    Returns:
+        Danh sach cac goi y tim kiem lien quan.
     """
     return controller.get_search_suggestions(query)

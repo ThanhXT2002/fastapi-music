@@ -19,3 +19,6 @@ dependencies = [
     "uvicorn>=0.34.2",
     "yt-dlp>=2024.12.13",
 ]
+
+[tool.fastapi]
+entrypoint = "main:app"
