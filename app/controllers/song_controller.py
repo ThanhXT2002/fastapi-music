@@ -38,6 +38,7 @@ from unidecode import unidecode
 
 # ── Internal imports ──────────────────────────────────────
 from app.models.song import Song, ProcessingStatus
+from app.schemas.base import ApiResponse
 from app.schemas.song import (
     SongInfoResponse, StatusResponse, APIResponse,
     CompletedSongResponse, CompletedSongsListResponse,
@@ -88,9 +89,9 @@ class SongController:
         sign = base64.b64encode(hmac.new(access_secret.encode('utf-8'), string_to_sign.encode('utf-8'), digestmod=hashlib.sha1).digest()).decode('utf-8')
 
         if not host or not access_key or not access_secret:
-            return APIResponse(success=False, message="Missing ACRCloud credentials", data=None)
+            return ApiResponse.fail(message="Missing ACRCloud credentials")
         if not file_bytes or len(file_bytes) < 128:
-            return APIResponse(success=False, message="Audio file is empty or too small", data=None)
+            return ApiResponse.fail(message="Audio file is empty or too small")
 
         file_name = 'sample.mp4'
         file_type, _ = mimetypes.guess_type(file_name)
@@ -122,7 +123,7 @@ class SongController:
                     "external_ids": music.get("external_ids", {}),
                     "external_metadata": music.get("external_metadata", {}),
                 }
-                return APIResponse(success=True, message="Song identified successfully", data=song_info)
+                return ApiResponse.ok(data=song_info, message="Song identified successfully")
             else:
                 error_msg = result.get("status", {}).get("msg") if result else r.text
                 return APIResponse(success=False, message=f"Could not identify song: {error_msg}", data=result)
@@ -250,11 +251,7 @@ class SongController:
                     created_at=existing_song.created_at
                 )
                 
-                return APIResponse(
-                    success=True,
-                    message="Song already available",
-                    data=response_data.model_dump()
-                )
+                return ApiResponse.ok(data=response_data.model_dump(), message="Song already available")
             
             video_info = await self.youtube_service.get_video_info(
                 youtube_url, 
@@ -322,11 +319,7 @@ class SongController:
                     db
                 )
             
-            return APIResponse(
-                success=True,
-                message="get info video success",
-                data=response_data.model_dump()
-            )
+            return ApiResponse.ok(data=response_data.model_dump(), message="get info video success")
             
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Failed to get video info: {str(e)}")
@@ -370,11 +363,7 @@ class SongController:
             updated_at=song.updated_at
         )
         
-        return APIResponse(
-            success=True,
-            message="Status retrieved successfully",
-            data=status_data.model_dump()
-        )
+        return ApiResponse.ok(data=status_data.model_dump(), message="Status retrieved successfully")
         
     async def get_audio_file(self, song_id: str, db: Session):
         """Lay duong dan file audio da download de phuc vu streaming.

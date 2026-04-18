@@ -2,6 +2,7 @@
 
 Module nay chua:
 - Schema request/response cho endpoint dang nhap Google.
+- AuthResponse boc trong ApiResponse chuan.
 
 Lien quan:
 - Route:      app/routes/auth.py
@@ -10,6 +11,9 @@ Lien quan:
 
 # ── Third-party imports ───────────────────────────────────
 from pydantic import BaseModel
+
+# ── Internal imports ──────────────────────────────────────
+from app.schemas.base import ApiResponse
 
 
 class GoogleTokenRequest(BaseModel):
@@ -23,7 +27,7 @@ class GoogleTokenRequest(BaseModel):
     token: str
 
 
-class TokenResponse(BaseModel):
+class TokenData(BaseModel):
     """Thong tin JWT token tra ve cho frontend.
 
     Attributes:
@@ -35,7 +39,7 @@ class TokenResponse(BaseModel):
     token_type: str
 
 
-class UserResponse(BaseModel):
+class UserData(BaseModel):
     """Thong tin nguoi dung tra ve sau khi dang nhap thanh cong.
 
     Attributes:
@@ -53,13 +57,20 @@ class UserResponse(BaseModel):
     is_verified: bool | None = None
 
 
-class AuthResponse(BaseModel):
-    """Response tong hop gom token va thong tin nguoi dung.
+class AuthData(BaseModel):
+    """Payload data tra ve khi dang nhap thanh cong.
 
     Attributes:
         token: JWT token thong tin.
         user: Thong tin nguoi dung da dang nhap.
     """
 
-    token: TokenResponse
-    user: UserResponse
+    token: TokenData
+    user: UserData
+
+
+# Re-export de backwards compatible voi code cu import AuthResponse
+AuthResponse = ApiResponse[AuthData]
+
+# Alias de route co the dung response_model
+AuthApiResponse = ApiResponse[AuthData]

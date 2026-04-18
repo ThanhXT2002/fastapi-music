@@ -26,7 +26,8 @@ from app.internal.utils.helpers import verify_firebase_token
 from app.models.errors import GoogleAuthError, UserNotFoundError
 from app.internal.storage.repositories.user import UserRepository
 from app.internal.rfc.jwt.jwt import create_access_token
-from app.schemas.auth import AuthResponse, TokenResponse, UserResponse
+from app.schemas.base import ApiResponse
+from app.schemas.auth import AuthData, TokenData, UserData
 
 
 class AuthController:
@@ -43,7 +44,7 @@ class AuthController:
     def __init__(self, db: Session) -> None:
         self.user_repo = UserRepository(db)
 
-    def google_login(self, token: str) -> AuthResponse:
+    def google_login(self, token: str) -> ApiResponse[AuthData]:
         """Xac thuc Google token va tra ve JWT cung thong tin user.
 
         Flow xu ly:
@@ -107,12 +108,12 @@ class AuthController:
                 expires_delta=token_expires,
             )
 
-            return AuthResponse(
-                token=TokenResponse(
+            auth_data = AuthData(
+                token=TokenData(
                     access_token=token,
                     token_type="bearer",
                 ),
-                user=UserResponse(
+                user=UserData(
                     id=user.id,
                     email=user.email,
                     name=user.name,
@@ -120,6 +121,7 @@ class AuthController:
                     is_verified=user.is_verified,
                 ),
             )
+            return ApiResponse.ok(data=auth_data, message="Đăng nhập thành công")
 
         except GoogleAuthError as e:
             raise HTTPException(

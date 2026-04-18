@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, status
 
 # ── Internal imports ──────────────────────────────────────
 from app.controllers.auth import AuthController, get_auth_controller
-from app.schemas.auth import GoogleTokenRequest, AuthResponse
+from app.schemas.auth import GoogleTokenRequest, AuthApiResponse
 
 
 # ── Router / Dependencies ─────────────────────────────────
@@ -32,7 +32,7 @@ AuthControllerDep = Annotated[
 
 @router.post(
     "/google",
-    response_model=AuthResponse,
+    response_model=AuthApiResponse,
     status_code=status.HTTP_200_OK,
     summary="Login with Google",
     description="Login or register a user with Google ID token",
@@ -40,7 +40,7 @@ AuthControllerDep = Annotated[
 def google_login(
     request: GoogleTokenRequest,
     auth_controller: AuthControllerDep,
-) -> AuthResponse:
+) -> AuthApiResponse:
     """Dang nhap hoac dang ky nguoi dung bang Google ID token.
 
     Sau khi xac thuc thanh cong:

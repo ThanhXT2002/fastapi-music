@@ -18,6 +18,9 @@ from enum import Enum
 # ── Third-party imports ───────────────────────────────────
 from pydantic import BaseModel, Field, field_validator
 
+# ── Internal imports ──────────────────────────────────────
+from app.schemas.base import ApiResponse as APIResponse  # noqa: F401 — re-export
+
 
 class ProcessingStatus(str, Enum):
     """Trang thai xu ly bai hat (ban Pydantic cho serialization)."""
@@ -86,18 +89,6 @@ class StatusResponse(BaseModel):
     updated_at: datetime
 
 
-class APIResponse(BaseModel):
-    """Response chung cho tat ca API endpoint.
-
-    Attributes:
-        success: True neu request xu ly thanh cong.
-        message: Thong bao mo ta ket qua.
-        data: Du lieu tra ve (nullable, tuy endpoint).
-    """
-
-    success: bool
-    message: str
-    data: dict | None = None
 
 
 class CompletedSongResponse(BaseModel):
