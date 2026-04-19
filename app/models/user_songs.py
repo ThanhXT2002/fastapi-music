@@ -6,7 +6,7 @@ Lien quan:
 """
 
 # ── Third-party imports ───────────────────────────────────
-from sqlalchemy import Table, Column, Integer, ForeignKey
+from sqlalchemy import Table, Column, Integer, ForeignKey, String
 
 # ── Internal imports ──────────────────────────────────────
 from app.config.database import Base
@@ -15,5 +15,5 @@ user_songs = Table(
     "user_songs",
     Base.metadata,
     Column("user_id", Integer, ForeignKey("users.id")),
-    Column("song_id", Integer, ForeignKey("songs.id")),
+    Column("song_id", String(50), ForeignKey("songs.id")),
 )

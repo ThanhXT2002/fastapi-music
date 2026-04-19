@@ -35,6 +35,7 @@ if settings.DATABASE_URL.startswith("sqlite"):
         pool_pre_ping=True,
     )
 else:
+    # MySQL / PostgreSQL — connection pool cho multi-user
     engine = create_engine(
         settings.DATABASE_URL,
         pool_size=10,
@@ -43,7 +44,7 @@ else:
         # Recycle connection moi 1 gio de tranh stale connection
         pool_recycle=3600,
         pool_pre_ping=True,
-        connect_args={"options": "-c timezone=utc"},
+        echo=False,
     )
 
 SessionLocal = sessionmaker(
