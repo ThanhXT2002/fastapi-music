@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, status
 
 # ── Internal imports ──────────────────────────────────────
 from app.controllers.auth import AuthController, get_auth_controller
-from app.schemas.auth import GoogleTokenRequest, AuthApiResponse
+from app.schemas.auth import SyncTokenRequest, AuthApiResponse
 
 
 # ── Router / Dependencies ─────────────────────────────────
@@ -31,24 +31,23 @@ AuthControllerDep = Annotated[
 # ── Endpoints ─────────────────────────────────────────────
 
 @router.post(
-    "/google",
+    "/sync",
     response_model=AuthApiResponse,
     status_code=status.HTTP_200_OK,
-    summary="Login with Google",
-    description="Login or register a user with Google ID token",
+    summary="Sync User with Firebase",
+    description="Sync a Firebase user session with Backend to generate local access token.",
 )
-def google_login(
-    request: GoogleTokenRequest,
+def sync_user(
+    request: SyncTokenRequest,
     auth_controller: AuthControllerDep,
 ) -> AuthApiResponse:
-    """Dang nhap hoac dang ky nguoi dung bang Google ID token.
+    """Đồng bộ ứng dụng với Firebase Token.
 
-    Sau khi xac thuc thanh cong:
-        - Tao hoac cap nhat thong tin nguoi dung trong database.
-        - Sinh JWT access token cho cac request tiep theo.
+    Sau khi xac thuc thanh cong tren client bang Firebase SDK,
+    gui ID Token ve day de Backend kiem tra va tao local session JWT.
 
     Args:
-        request: Chua Google/Firebase ID token tu frontend.
+        request: Chua Firebase ID token tu frontend.
         auth_controller: Controller xu ly nghiep vu xac thuc.
 
     Returns:
@@ -56,7 +55,6 @@ def google_login(
 
     Raises:
         HTTP 401: Token khong hop le hoac het han.
-        HTTP 404: Khong tim thay nguoi dung (truong hop bat thuong).
         HTTP 500: Loi he thong khong xac dinh.
     """
-    return auth_controller.google_login(request.token)
+    return auth_controller.sync_user(request.token)

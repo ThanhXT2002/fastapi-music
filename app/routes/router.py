@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from app.routes.song_routes import router as song_router
 from app.routes.auth import router as auth_router
 from app.routes.ytmusic_routes import router as ytmusic_router
+from app.routes.user import router as user_router
 
 
 # ── Router ────────────────────────────────────────────────
@@ -27,6 +28,7 @@ api_router = APIRouter()
 api_router.include_router(song_router)
 api_router.include_router(auth_router)
 api_router.include_router(ytmusic_router)
+api_router.include_router(user_router)
 
 
 # ── Endpoints ─────────────────────────────────────────────

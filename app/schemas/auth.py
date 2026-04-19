@@ -16,23 +16,23 @@ from pydantic import BaseModel
 from app.schemas.base import ApiResponse
 
 
-class GoogleTokenRequest(BaseModel):
-    """Du lieu dau vao khi dang nhap bang Google.
+class SyncTokenRequest(BaseModel):
+    """Du lieu dau vao khi dong bo nguoi dung qua Firebase.
 
     Attributes:
         token: Firebase ID token nhan tu frontend sau khi
-            nguoi dung dang nhap Google tren client.
+            nguoi dung xac thuc thanh cong tren app.
     """
 
     token: str
 
 
 class TokenData(BaseModel):
-    """Thong tin JWT token tra ve cho frontend.
+    """Thong tin JWT token tra ve.
 
     Attributes:
-        access_token: JWT token dung de xac thuc cac request tiep theo.
-        token_type: Loai token, luon la "bearer".
+        access_token: JWT token dung de xac thuc request tiep theo.
+        token_type: "bearer".
     """
 
     access_token: str
@@ -40,20 +40,22 @@ class TokenData(BaseModel):
 
 
 class UserData(BaseModel):
-    """Thong tin nguoi dung tra ve sau khi dang nhap thanh cong.
+    """Thong tin nguoi dung tra ve.
 
     Attributes:
-        id: ID nguoi dung trong database.
-        email: Email tai khoan Google.
-        name: Ten hien thi (nullable neu Google khong cung cap).
-        profile_picture: URL anh dai dien tu Google.
+        id: Firebase UID.
+        email: Email tai khoan.
+        name: Ten hien thi.
+        profile_picture: URL anh dai dien.
+        signup_provider: Phuong thuc dang ky ban dau.
         is_verified: Trang thai xac thuc email.
     """
 
-    id: int
+    id: str
     email: str
     name: str | None = None
     profile_picture: str | None = None
+    signup_provider: str | None = None
     is_verified: bool | None = None
 
 

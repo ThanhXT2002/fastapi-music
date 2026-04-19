@@ -22,8 +22,8 @@ from sqlalchemy.orm import Session
 # ── Internal imports ──────────────────────────────────────
 from app.config.database import get_db
 from app.config.config import settings
-from app.internal.utils.helpers import verify_firebase_token
-from app.models.errors import GoogleAuthError, UserNotFoundError
+from app.services.firebase_service import verify_firebase_token
+from app.models.errors import UserNotFoundError
 from app.internal.storage.repositories.user import UserRepository
 from app.internal.rfc.jwt.jwt import create_access_token
 from app.schemas.base import ApiResponse
@@ -34,77 +34,63 @@ class AuthController:
     """Xu ly xac thuc va quan ly phien dang nhap nguoi dung.
 
     Chiu trach nhiem:
-        - Xac thuc Firebase/Google ID token.
-        - Tao nguoi dung moi hoac cap nhat thong tin Google.
-        - Sinh JWT access token cho frontend.
-
-    Khong nen dung truc tiep — inject qua get_auth_controller.
+        - Xac thuc Firebase ID token.
+        - Tao nguoi dung moi hoac cap nhat thong tin.
+        - Sinh JWT access token cho app.
     """
 
     def __init__(self, db: Session) -> None:
         self.user_repo = UserRepository(db)
 
-    def google_login(self, token: str) -> ApiResponse[AuthData]:
-        """Xac thuc Google token va tra ve JWT cung thong tin user.
+    def sync_user(self, firebase_token: str) -> ApiResponse[AuthData]:
+        """Xac thuc Firebase token va tra ve JWT cung thong tin user.
 
         Flow xu ly:
             1. Verify Firebase ID token.
-            2. Tim user theo google_id.
-            3. Neu chua co: tim theo email (truong hop dang ky
-               cung email nhung khac phuong thuc).
-            4. Neu van chua co: tao user moi.
-            5. Sinh JWT access token.
+            2. Tim user theo uid.
+            3. Neu chua co: tao user moi (kem theo p/t dang ky bg metadata).
+            4. Sinh JWT access token.
 
         Args:
-            token: Firebase ID token tu frontend.
+            firebase_token: Firebase ID token tu frontend.
 
         Returns:
-            AuthResponse gom JWT token va thong tin nguoi dung.
-
+            AuthResponse gom app token va thong tin nguoi dung.
+            
         Raises:
-            HTTPException 401: Token khong hop le.
-            HTTPException 404: Khong tim thay nguoi dung.
-            HTTPException 500: Loi he thong khong xac dinh.
+            HTTPException
         """
         try:
-            user_info = verify_firebase_token(token)
+            # 1. Giai ma token tu Firebase
+            user_info = verify_firebase_token(firebase_token)
+            uid = user_info['uid']
 
-            user = self.user_repo.find_by_google_id(
-                user_info['google_id']
-            )
+            # 2. Tim user theo UID
+            user = self.user_repo.find_by_uid(uid)
 
             if not user:
-                # Tim theo email — truong hop user da ton tai
-                # nhung dang nhap bang phuong thuc khac truoc do
-                user = self.user_repo.find_by_email(
-                    user_info['email']
-                )
+                # 3. Neu chua co -> Tao user moi
+                provider = user_info.get("firebase", {}).get("sign_in_provider", "email")
+                user = self.user_repo.create({
+                    'id': uid,
+                    'email': user_info['email'],
+                    'name': user_info.get('name'),
+                    'profile_picture': user_info.get('picture'),
+                    'is_verified': user_info.get('email_verified', False),
+                    'signup_provider': provider
+                })
+            else:
+                # Cap nhat vao DB neu user co thay doi gi do tren Firebase
+                user = self.user_repo.update(uid, {
+                    'is_verified': user_info.get('email_verified', user.is_verified),
+                    'name': user_info.get('name', user.name),
+                    'profile_picture': user_info.get('picture', user.profile_picture),
+                })
 
-                if user:
-                    user = self.user_repo.update(user.id, {
-                        'google_id': user_info['google_id'],
-                        'is_verified': True,
-                        'name': user_info.get('name', user.name),
-                        'profile_picture': user_info.get(
-                            'profile_picture', user.profile_picture
-                        ),
-                    })
-                else:
-                    user = self.user_repo.create({
-                        'email': user_info['email'],
-                        'name': user_info.get('name'),
-                        'profile_picture': user_info.get(
-                            'profile_picture'
-                        ),
-                        'google_id': user_info['google_id'],
-                        'is_verified': True,
-                    })
-
-            token_expires = timedelta(
-                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-            )
+            # 4. Sinh JWT token cua Backend
+            token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
             token = create_access_token(
-                data={"sub": user.email},
+                data={"sub": user.id},  # UUID/string UID
                 expires_delta=token_expires,
             )
 
@@ -118,22 +104,16 @@ class AuthController:
                     email=user.email,
                     name=user.name,
                     profile_picture=user.profile_picture,
+                    signup_provider=user.signup_provider,
                     is_verified=user.is_verified,
                 ),
             )
             return ApiResponse.ok(data=auth_data, message="Đăng nhập thành công")
 
-        except GoogleAuthError as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=str(e),
-            )
-        except UserNotFoundError as e:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e),
-            )
         except Exception as e:
+            # Neu da la HTTPException do verify_firebase_token ban ra thi throw luon
+            if isinstance(e, HTTPException):
+                raise e
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e),

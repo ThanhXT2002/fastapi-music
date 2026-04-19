@@ -6,14 +6,17 @@ Lien quan:
 """
 
 # ── Third-party imports ───────────────────────────────────
-from sqlalchemy import Table, Column, Integer, ForeignKey, String
-
-# ── Internal imports ──────────────────────────────────────
+from sqlalchemy import Column, String, DateTime, ForeignKey, Index
+from sqlalchemy.sql import func
 from app.config.database import Base
 
-user_songs = Table(
-    "user_songs",
-    Base.metadata,
-    Column("user_id", Integer, ForeignKey("users.id")),
-    Column("song_id", String(50), ForeignKey("songs.id")),
-)
+class UserSong(Base):
+    __tablename__ = "user_songs"
+
+    user_id = Column(String(50), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    song_id = Column(String(50), ForeignKey("songs.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_user_songs_created', 'created_at'),
+    )

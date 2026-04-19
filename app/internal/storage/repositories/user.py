@@ -41,16 +41,16 @@ class UserRepository:
         """
         return self.db.query(User).filter(User.email == email).first()
 
-    def find_by_google_id(self, google_id: str) -> Optional[User]:
-        """Tim kiem nguoi dung theo Google Account ID.
+    def find_by_uid(self, uid: str) -> Optional[User]:
+        """Tim kiem nguoi dung theo Firebase UID.
 
         Args:
-            google_id: ID duoc tra ve tu Firebase Auth.
+            uid: ID duoc tra ve tu Firebase Auth.
 
         Returns:
             Doi tuong User neu tim thay, hoac None neu khong.
         """
-        return self.db.query(User).filter(User.google_id == google_id).first()
+        return self.db.query(User).filter(User.id == uid).first()
 
     def create(self, user_data: Dict[str, Any]) -> User:
         """Tao va luu tru mot nguoi dung moi vao database.
@@ -75,7 +75,7 @@ class UserRepository:
             self.db.rollback()
             raise
 
-    def update(self, user_id: int, user_data: Dict[str, Any]) -> User:
+    def update(self, user_id: str, user_data: Dict[str, Any]) -> User:
         """Cap nhat thong tin nguoi dung theo ID.
 
         Args:
