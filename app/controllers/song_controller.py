@@ -126,9 +126,9 @@ class SongController:
                 return ApiResponse.ok(data=song_info, message="Song identified successfully")
             else:
                 error_msg = result.get("status", {}).get("msg") if result else r.text
-                return APIResponse(success=False, message=f"Could not identify song: {error_msg}", data=result)
+                return APIResponse.fail(message=f"Could not identify song: {error_msg}", code=400)
         except Exception as e:
-            return APIResponse(success=False, message=f"Error: {str(e)}", data=None)
+            return APIResponse.fail(message=f"Error: {str(e)}", code=500)
     
     def get_domain_url(self, request: Request) -> str:
         """Xac dinh domain URL tu request headers.
@@ -629,10 +629,9 @@ class SongController:
             )
             
             search_info = f" matching '{search_key}'" if search_key else ""
-            return APIResponse(
-                success=True,
+            return APIResponse.ok(
+                data=response_data.model_dump(),
                 message=f"Retrieved {len(songs_data)} completed songs{search_info} (limit: {limit})",
-                data=response_data.model_dump()
             )
             
         except Exception as e:

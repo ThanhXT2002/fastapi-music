@@ -224,17 +224,16 @@ class YTMusicService:
             Danh sách bài hát top charts, hoặc dict chứa
             thông báo lỗi nếu không có dữ liệu.
         """
-        charts = yt.get_charts(country=country)
-
-        songs = charts.get('songs')
-        if not songs:
-            return {"error": "Khong co du lieu top songs cho quoc gia nay"}
-
-        items = songs.get('items')
-        if not items or not isinstance(items, list) or len(items) == 0:
-            return {"error": "Khong co du lieu top songs cho quoc gia nay"}
-
-        return items[:limit]
+        # Fallback: yt.get_charts() hien tai bi loi do YouTube doi giao dien.
+        # Dung yt.search de lay cac bai hat thinh hanh thay the.
+        query = f"Top Trending Songs {country}" if country != 'ZZ' else "Top Hits Global Music"
+        try:
+            results = yt.search(query, filter="songs", limit=limit)
+            if not results:
+                return [{"error": "Khong co du lieu"}]
+            return results
+        except Exception as e:
+            return [{"error": str(e)}]
 
     def get_search_suggestions(self, query: str) -> list:
         """Lấy gợi ý tìm kiếm từ YouTube Music.
