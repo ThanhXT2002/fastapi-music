@@ -12,6 +12,7 @@ Liên quan:
 
 # ── Standard library imports ──────────────────────────────
 import subprocess
+import concurrent.futures
 
 # ── Third-party imports ───────────────────────────────────
 from fastapi.responses import StreamingResponse
@@ -100,8 +101,20 @@ class YTMusicService:
         Returns:
             Danh sách kết quả tìm kiếm từ YouTube Music API.
         """
-        results = yt.search(query=query, filter=filter, limit=limit)
-
+        try:
+            results = yt.search(query=query, filter=filter, limit=limit)
+        except Exception as e:
+            # Fallback: YouTube Music thỉnh thoảng trả về giao diện mới (Top result card)
+            # làm ytmusicapi bị lỗi KeyError: 'header'. Ta fallback bằng cách fetch song, artist, album đồng thời.
+            if filter is None:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    f_songs = executor.submit(yt.search, query, filter="songs", limit=limit)
+                    f_artists = executor.submit(yt.search, query, filter="artists", limit=limit)
+                    f_albums = executor.submit(yt.search, query, filter="albums", limit=limit)
+                    
+                    return f_songs.result() + f_artists.result() + f_albums.result()
+            else:
+                raise e
         if filter is None:
             # Gom nhom ket qua theo category de frontend hien thi
             top_result = [
@@ -226,7 +239,7 @@ class YTMusicService:
         """
         # Fallback: yt.get_charts() hien tai bi loi do YouTube doi giao dien.
         # Dung yt.search de lay cac bai hat thinh hanh thay the.
-        query = f"Top Trending Songs {country}" if country != 'ZZ' else "Top Hits Global Music"
+        query = f"Top Trending Songs {country}" if country != 'ZZ' else "Nhạc Việt Hot Trending"
         try:
             results = yt.search(query, filter="songs", limit=limit)
             if not results:
