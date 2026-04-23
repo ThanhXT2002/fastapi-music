@@ -18,6 +18,7 @@ from typing import Annotated
 # ── Third-party imports ───────────────────────────────────
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 # ── Internal imports ──────────────────────────────────────
 from app.config.database import get_db
@@ -70,10 +71,17 @@ class AuthController:
 
             if not user:
                 # 3. Neu chua co -> Tao user moi
+                email = user_info.get('email')
+                if not email:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Không lấy được email từ phương thức đăng nhập này."
+                    )
+                
                 provider = user_info.get("firebase", {}).get("sign_in_provider", "email")
                 user = self.user_repo.create({
                     'id': uid,
-                    'email': user_info['email'],
+                    'email': email,
                     'name': user_info.get('name'),
                     'profile_picture': user_info.get('picture'),
                     'is_verified': user_info.get('email_verified', False),
@@ -110,6 +118,11 @@ class AuthController:
             )
             return ApiResponse.ok(data=auth_data, message="Đăng nhập thành công")
 
+        except IntegrityError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email này đã được sử dụng bởi một tài khoản khác. Vui lòng liên kết tài khoản."
+            )
         except Exception as e:
             # Neu da la HTTPException do verify_firebase_token ban ra thi throw luon
             if isinstance(e, HTTPException):
