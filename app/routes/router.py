@@ -19,6 +19,8 @@ from app.routes.song_routes import router as song_router
 from app.routes.auth import router as auth_router
 from app.routes.ytmusic_routes import router as ytmusic_router
 from app.routes.user import router as user_router
+from app.routes.favorite_routes import router as favorite_router
+from app.routes.playlist_routes import router as playlist_router
 
 
 # ── Router ────────────────────────────────────────────────
@@ -29,6 +31,8 @@ api_router.include_router(song_router)
 api_router.include_router(auth_router)
 api_router.include_router(ytmusic_router)
 api_router.include_router(user_router)
+api_router.include_router(favorite_router)
+api_router.include_router(playlist_router)
 
 
 # ── Endpoints ─────────────────────────────────────────────

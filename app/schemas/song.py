@@ -172,3 +172,12 @@ class CompletedSongsQueryParams(BaseModel):
         if isinstance(v, str):
             return v.strip()
         return None
+
+class FavoriteRequest(BaseModel):
+    """Du lieu dau vao de them bai hat vao muc Yeu thich.
+
+    Attributes:
+        song_id: YouTube video ID cua bai hat.
+    """
+    song_id: str
+

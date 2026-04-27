@@ -27,6 +27,7 @@ from app.config.database import create_tables, get_database_info
 # Import model de SQLAlchemy dang ky metadata truoc create_tables()
 from app.models.user import User  # noqa: F401
 from app.models.song import Song  # noqa: F401
+from app.models.playlist import Playlist, PlaylistSong  # noqa: F401
 
 
 # ── Lifespan ──────────────────────────────────────────────
